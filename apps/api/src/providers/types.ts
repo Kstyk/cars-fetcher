@@ -1,6 +1,12 @@
 import type { Filter } from '../db/schema.js';
 
-export type ProviderName = 'otomoto' | 'olx' | 'mobile_de' | 'autoscout24';
+export type ProviderName =
+  | 'otomoto'
+  | 'olx'
+  | 'autoplac'
+  | 'findcar'
+  | 'mobile_de'
+  | 'autoscout24';
 
 export type FuelType =
   | 'petrol'

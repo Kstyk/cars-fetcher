@@ -15,6 +15,7 @@ import type {
   Notification,
   NotificationPreferences,
   Paginated,
+  ProviderInfo,
   Taxonomy,
   User,
 } from './types';
@@ -45,6 +46,15 @@ export function useTaxonomy() {
     queryFn: () => api.get<Taxonomy>('/api/taxonomy'),
     staleTime: Infinity,
     gcTime: Infinity,
+  });
+}
+
+/** Which marketplaces exist and which of them actually have an adapter. */
+export function useProviders() {
+  return useQuery({
+    queryKey: ['providers'],
+    queryFn: () => api.get<ProviderInfo[]>('/api/providers'),
+    staleTime: Infinity,
   });
 }
 

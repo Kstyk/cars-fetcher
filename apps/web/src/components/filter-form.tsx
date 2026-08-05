@@ -1,19 +1,23 @@
 import { useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox, MultiCombobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label as FieldLabel } from '@/components/ui/label';
 import { Separator, Skeleton } from '@/components/ui/misc';
 import {
   BODY_LABELS,
   FUEL_LABELS,
   GEARBOX_LABELS,
+  label,
 } from '@/lib/format';
-import { useTaxonomy } from '@/lib/queries';
-import type { BodyType, FuelType, Gearbox } from '@/lib/types';
+import { useProviders, useTaxonomy } from '@/lib/queries';
+import type { BodyType, Filter, FuelType, Gearbox } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 /** The criteria a single filter row carries, in the shape the API expects. */
 export interface FilterFormValue {
+  provider: string;
   make: string | null;
   model: string | null;
   yearFrom: string;
@@ -43,6 +47,7 @@ export interface FilterFormValue {
 }
 
 export const EMPTY_FILTER_FORM: FilterFormValue = {
+  provider: 'otomoto',
   make: null,
   model: null,
   yearFrom: '',
@@ -77,7 +82,7 @@ export function toFilterPayload(value: FilterFormValue): Record<string, unknown>
     input.trim() === '' ? null : Number(input);
 
   return {
-    provider: 'otomoto',
+    provider: value.provider,
     name: [value.make, value.model].filter(Boolean).join(' ') || null,
     make: value.make,
     model: value.model,
@@ -108,6 +113,148 @@ export function toFilterPayload(value: FilterFormValue): Record<string, unknown>
   };
 }
 
+/** Rebuilds the form state from a saved filter, for editing and duplicating. */
+export function filterToFormValue(filter: Filter): FilterFormValue {
+  const text = (value: number | null | undefined) =>
+    value === null || value === undefined ? '' : String(value);
+
+  return {
+    provider: filter.provider,
+    make: filter.make,
+    model: filter.model,
+    yearFrom: text(filter.yearFrom),
+    yearTo: text(filter.yearTo),
+    priceFrom: text(filter.priceFrom),
+    priceTo: text(filter.priceTo),
+    mileageFrom: text(filter.mileageFrom),
+    mileageTo: text(filter.mileageTo),
+    enginePowerFrom: text(filter.enginePowerFrom),
+    enginePowerTo: text(filter.enginePowerTo),
+    fuelTypes: filter.fuelTypes ?? [],
+    gearboxes: filter.gearboxes ?? [],
+    bodyTypes: filter.bodyTypes ?? [],
+    colors: filter.colors ?? [],
+    countryOrigin: filter.countryOrigin,
+    doorCounts: (filter.doorCounts ?? []).map(String),
+    seatCounts: (filter.seatCounts ?? []).map(String),
+    excludeDamaged: filter.excludeDamaged,
+    onlyWithPhotos: filter.onlyWithPhotos,
+    registeredInPl: filter.registeredInPl ?? false,
+    firstOwner: filter.firstOwner ?? false,
+    noAccident: filter.noAccident ?? false,
+    servicedAtAso: filter.servicedAtAso ?? false,
+    hasVin: filter.hasVin ?? false,
+    vatInvoice: filter.vatInvoice ?? false,
+    equipment: filter.equipment ?? [],
+  };
+}
+
+/**
+ * Every criterion a filter carries, rendered as chips. The list view used to
+ * show only a handful of fields, which hid things like the chosen marketplace.
+ */
+export function FilterSummary({ filter }: { filter: Filter }) {
+  const taxonomy = useTaxonomy();
+  const providers = useProviders();
+
+  const providerLabel =
+    providers.data?.find((entry) => entry.provider === filter.provider)?.label ??
+    filter.provider;
+
+  const equipmentLabels = (filter.equipment ?? []).map(
+    (id) => taxonomy.data?.equipment.find((item) => item.id === id)?.label ?? id,
+  );
+
+  const range = (
+    from: number | null | undefined,
+    to: number | null | undefined,
+    unit = '',
+  ): string | null => {
+    const format = (value: number) => value.toLocaleString('pl-PL');
+    if (from !== null && from !== undefined && to !== null && to !== undefined) {
+      return `${format(from)}–${format(to)}${unit}`;
+    }
+    if (from !== null && from !== undefined) return `od ${format(from)}${unit}`;
+    if (to !== null && to !== undefined) return `do ${format(to)}${unit}`;
+    return null;
+  };
+
+  const chips: Array<{ label: string; value: string }> = [];
+  const push = (label: string, value: string | null | undefined) => {
+    if (value) chips.push({ label, value });
+  };
+
+  push('Marka', filter.make);
+  push('Model', filter.model);
+  push('Generacja', filter.generation);
+  push('Fraza', filter.query);
+  push('Rocznik', range(filter.yearFrom, filter.yearTo));
+  push('Cena', range(filter.priceFrom, filter.priceTo, ' zł'));
+  push('Przebieg', range(filter.mileageFrom, filter.mileageTo, ' km'));
+  push('Moc', range(filter.enginePowerFrom, filter.enginePowerTo, ' KM'));
+  push('Pojemność', range(filter.engineCapacityFrom, filter.engineCapacityTo, ' cm³'));
+  push('Paliwo', filter.fuelTypes?.map((f) => label(FUEL_LABELS, f)).join(', '));
+  push('Skrzynia', filter.gearboxes?.map((g) => label(GEARBOX_LABELS, g)).join(', '));
+  push('Nadwozie', filter.bodyTypes?.map((b) => label(BODY_LABELS, b)).join(', '));
+  push('Kolor', filter.colors?.join(', '));
+  push('Kraj', filter.countryOrigin);
+  push('Drzwi', filter.doorCounts?.join(', '));
+  push('Miejsca', filter.seatCounts?.join(', '));
+  push('Miasto', filter.city);
+  push('Promień', filter.radiusKm ? `${filter.radiusKm} km` : null);
+
+  const flags = [
+    filter.excludeDamaged && 'bez uszkodzeń',
+    filter.noAccident && 'bezwypadkowy',
+    filter.servicedAtAso && 'ASO',
+    filter.firstOwner && 'pierwszy właściciel',
+    filter.registeredInPl && 'zarejestrowany w PL',
+    filter.hasVin && 'z VIN',
+    filter.vatInvoice && 'faktura VAT',
+    filter.onlyWithPhotos && 'ze zdjęciami',
+  ].filter((entry): entry is string => Boolean(entry));
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {/* The marketplace decides which criteria apply at all, so it leads. */}
+      <Badge variant="secondary">{providerLabel}</Badge>
+
+      {chips.map((chip) => (
+        <span
+          key={chip.label}
+          className="text-muted-foreground rounded-md border px-2 py-0.5 text-xs"
+        >
+          <span className="opacity-70">{chip.label}:</span> {chip.value}
+        </span>
+      ))}
+
+      {flags.map((flag) => (
+        <Badge key={flag} variant="outline" className="font-normal">
+          {flag}
+        </Badge>
+      ))}
+
+      {equipmentLabels.length > 0 ? (
+        <span
+          className="text-muted-foreground rounded-md border px-2 py-0.5 text-xs"
+          title={equipmentLabels.join(', ')}
+        >
+          <span className="opacity-70">Wyposażenie:</span>{' '}
+          {equipmentLabels.length <= 3
+            ? equipmentLabels.join(', ')
+            : `${equipmentLabels.slice(0, 2).join(', ')} +${equipmentLabels.length - 2}`}
+        </span>
+      ) : null}
+
+      {chips.length === 0 && flags.length === 0 && equipmentLabels.length === 0 ? (
+        <span className="text-muted-foreground text-xs">
+          Bez dodatkowych kryteriów — wszystkie oferty z tego serwisu
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 const FUEL_OPTIONS = Object.entries(FUEL_LABELS).map(([value, label]) => ({
   value,
   label,
@@ -129,6 +276,7 @@ export function FilterForm({
   onChange: (value: FilterFormValue) => void;
 }) {
   const taxonomy = useTaxonomy();
+  const providers = useProviders();
 
   function patch(update: Partial<FilterFormValue>): void {
     onChange({ ...value, ...update });
@@ -172,6 +320,36 @@ export function FilterForm({
 
   return (
     <div className="space-y-5">
+      <Section
+        title="Serwis"
+        description="Filtr działa po stronie wybranego serwisu — każdy ma własny zestaw dostępnych kryteriów."
+      >
+        <div className="grid gap-2 sm:grid-cols-4">
+          {(providers.data ?? []).map((entry) => (
+            <button
+              key={entry.provider}
+              type="button"
+              disabled={!entry.implemented}
+              onClick={() => patch({ provider: entry.provider })}
+              className={cn(
+                'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                value.provider === entry.provider
+                  ? 'border-primary bg-primary/10 font-medium'
+                  : 'hover:bg-accent/50',
+                !entry.implemented && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              <span>{entry.label}</span>
+              {!entry.implemented ? (
+                <span className="text-muted-foreground text-xs">wkrótce</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Separator />
+
       <Section title="Pojazd">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Marka">
@@ -392,7 +570,7 @@ function Section({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-normal">{label}</Label>
+      <FieldLabel className="text-xs font-normal">{label}</FieldLabel>
       {children}
     </div>
   );
@@ -413,7 +591,7 @@ function RangeField({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-normal">{label}</Label>
+      <FieldLabel className="text-xs font-normal">{label}</FieldLabel>
       <div className="flex items-center gap-1.5">
         <Input
           type="number"

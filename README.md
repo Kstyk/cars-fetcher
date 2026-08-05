@@ -198,6 +198,73 @@ OTOMOTO_PASSWORD=...
 
 `GET /api/providers` pokazuje, które źródło jest aktualnie aktywne.
 
+## Integracja z OLX
+
+OLX jest osobnym adapterem —
+[`olx.source.ts`](apps/api/src/providers/olx/olx.source.ts) — korzystającym z
+publicznego API JSON, **nie** z parsowania HTML.
+
+### Dlaczego API, a nie strona
+
+`robots.txt` OLX blokuje `/api/`, ale robi jawny wyjątek:
+
+```
+Disallow: /api/
+Allow: /api/v1/offers/
+Allow: /api/v1/targeting/
+Allow: /api/v1/friendly-links/
+```
+
+Endpoint ofert jest więc drogą sankcjonowaną — czysty JSON, bez zgadywania
+struktury DOM.
+
+### Dwie osobliwości OLX
+
+**1. Nie ma filtra marki.** API odrzuca `filter_enum_make`:
+
+```
+"Dynamic filters not applicable for category 84: filter_enum_make"
+```
+
+Każda marka to u nich **osobna kategoria** (Volvo = 208, Toyota = 206,
+Mazda = 194, Cupra = 4769). Dlatego adapter potrzebuje mapy slug → `category_id`:
+
+```bash
+npm run taxonomy:olx --workspace @cars-fetcher/api
+```
+
+Wynik trafia do `apps/api/src/data/olx-taxonomy.json`. Bez tego pliku adapter
+nadal działa — szuka w kategorii ogólnej (84) z marką w `query` — tylko mniej
+precyzyjnie. Wyniki i tak przechodzą filtrowanie po stronie aplikacji.
+
+**2. OLX zwraca więcej danych niż Otomoto.** Oferta niesie `car_body`, `color`,
+`drive` i `vin`, których wyszukiwarka Otomoto nie podaje. Ten sam
+`NormalizedListing` obsługuje oba źródła — pola po prostu bywają puste.
+
+### Uwaga na klienta HTTP
+
+OLX stoi za CloudFrontem, który odrzuca `curl` z 403 (odcisk TLS), ale
+przepuszcza `fetch` Node'a. `ScrapingClient` używa globalnego `fetch`, więc
+działa. Debugując z terminala, nie sugeruj się `curl` — użyj Node'a.
+
+## Serwisy
+
+| Serwis        | Status              | Źródło danych                    |
+| ------------- | ------------------- | -------------------------------- |
+| Otomoto       | działa              | publiczne strony ofert / API partnerskie |
+| OLX           | działa              | `/api/v1/offers/` (dozwolone w robots.txt) |
+| autoplac.pl   | **niezaimplementowane** | —                            |
+| FindCar       | **niezaimplementowane** | —                            |
+
+`GET /api/providers` zwraca ten stan; UI wyszarza serwisy bez adaptera i
+oznacza je jako „wkrótce". Filtr przypisany do niezaimplementowanego serwisu
+kończy przebieg statusem `failed` z czytelnym powodem, zamiast po cichu nie
+zwracać nic.
+
+Dodanie kolejnego serwisu to jedna implementacja
+[`ListingSource`](apps/api/src/providers/types.ts) plus wpis w
+[`registry.ts`](apps/api/src/providers/registry.ts).
+
 ### Uwaga prawna
 
 `robots.txt` zezwala na strony ofert, ale regulamin serwisu to osobna sprawa i
@@ -295,7 +362,9 @@ W workspace `@cars-fetcher/api`:
 | Komenda                  | Działanie                                     |
 | ------------------------ | --------------------------------------------- |
 | `npm run scrape:test`    | test scrapera na żywym Otomoto                |
-| `npm run taxonomy:build` | przebudowa słownika marek/modeli/wyposażenia  |
+| `npm run olx:test`       | test adaptera OLX                             |
+| `npm run taxonomy:build` | przebudowa słownika Otomoto (marki, modele, wyposażenie) |
+| `npm run taxonomy:olx`   | przebudowa mapy marek OLX (slug → category_id) |
 
 ## Co dalej
 

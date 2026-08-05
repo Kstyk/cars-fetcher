@@ -23,6 +23,8 @@ import {
 export const providerEnum = pgEnum('provider', [
   'otomoto',
   'olx',
+  'autoplac',
+  'findcar',
   'mobile_de',
   'autoscout24',
 ]);

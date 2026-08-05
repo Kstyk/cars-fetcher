@@ -1,4 +1,20 @@
-export type Provider = 'otomoto' | 'olx' | 'mobile_de' | 'autoscout24';
+export type Provider =
+  | 'otomoto'
+  | 'olx'
+  | 'autoplac'
+  | 'findcar'
+  | 'mobile_de'
+  | 'autoscout24';
+
+export interface ProviderInfo {
+  provider: Provider;
+  label: string;
+  /** False for providers listed in the UI that have no adapter yet. */
+  implemented: boolean;
+  configured: boolean;
+  live: boolean;
+  mode?: string;
+}
 
 export type FuelType =
   | 'petrol'

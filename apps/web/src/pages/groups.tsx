@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import {
   ListFilterIcon,
   Loader2Icon,
+  PencilIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -29,7 +30,9 @@ import { Label } from '@/components/ui/label';
 import { EmptyState, Skeleton, Textarea } from '@/components/ui/misc';
 import { Switch } from '@/components/ui/switch';
 import { formatRelative } from '@/lib/format';
+import { EditGroupDialog } from '@/components/edit-group-dialog';
 import { MultiCombobox } from '@/components/ui/combobox';
+import type { FilterGroup } from '@/lib/types';
 import {
   useCreateGroup,
   useDeleteGroup,
@@ -43,6 +46,7 @@ export function GroupsPage() {
   const fetchGroup = useFetchGroup();
   const deleteGroup = useDeleteGroup();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<FilterGroup | null>(null);
 
   return (
     <div className="space-y-6">
@@ -104,6 +108,14 @@ export function GroupsPage() {
                             : undefined
                         }
                       />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Edytuj grupę"
+                      onClick={() => setEditing(group)}
+                    >
+                      <PencilIcon />
                     </Button>
                     <Button
                       size="icon"
@@ -186,6 +198,16 @@ export function GroupsPage() {
       )}
 
       <CreateGroupDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+
+      {editing ? (
+        <EditGroupDialog
+          group={editing}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,591 @@
+{
+  "generatedAt": "2026-08-05T17:16:29.116Z",
+  "allCarsCategoryId": 84,
+  "makes": [
+    {
+      "slug": "abarth",
+      "label": "Abarth",
+      "categoryId": 4876
+    },
+    {
+      "slug": "acura",
+      "label": "Acura",
+      "categoryId": 4877
+    },
+    {
+      "slug": "aixam",
+      "label": "Aixam",
+      "categoryId": 1556
+    },
+    {
+      "slug": "alfa-romeo",
+      "label": "Alfa-Romeo",
+      "categoryId": 181
+    },
+    {
+      "slug": "alpina",
+      "label": "Alpina",
+      "categoryId": 4878
+    },
+    {
+      "slug": "aston-martin",
+      "label": "Aston-Martin",
+      "categoryId": 4879
+    },
+    {
+      "slug": "audi",
+      "label": "Audi",
+      "categoryId": 182
+    },
+    {
+      "slug": "baic",
+      "label": "Baic",
+      "categoryId": 4880
+    },
+    {
+      "slug": "baw",
+      "label": "Baw",
+      "categoryId": 5193
+    },
+    {
+      "slug": "bentley",
+      "label": "Bentley",
+      "categoryId": 4881
+    },
+    {
+      "slug": "blaval",
+      "label": "Blaval",
+      "categoryId": 2961
+    },
+    {
+      "slug": "bmw",
+      "label": "Bmw",
+      "categoryId": 183
+    },
+    {
+      "slug": "buick",
+      "label": "Buick",
+      "categoryId": 4886
+    },
+    {
+      "slug": "byd",
+      "label": "Byd",
+      "categoryId": 4870
+    },
+    {
+      "slug": "cadillac",
+      "label": "Cadillac",
+      "categoryId": 1353
+    },
+    {
+      "slug": "changan",
+      "label": "Changan",
+      "categoryId": 5475
+    },
+    {
+      "slug": "chatenet",
+      "label": "Chatenet",
+      "categoryId": 4887
+    },
+    {
+      "slug": "chery",
+      "label": "Chery",
+      "categoryId": 5186
+    },
+    {
+      "slug": "chevrolet",
+      "label": "Chevrolet",
+      "categoryId": 184
+    },
+    {
+      "slug": "chrysler",
+      "label": "Chrysler",
+      "categoryId": 185
+    },
+    {
+      "slug": "citroen",
+      "label": "Citroen",
+      "categoryId": 186
+    },
+    {
+      "slug": "cupra",
+      "label": "Cupra",
+      "categoryId": 4769
+    },
+    {
+      "slug": "dacia",
+      "label": "Dacia",
+      "categoryId": 1347
+    },
+    {
+      "slug": "daewoo",
+      "label": "Daewoo",
+      "categoryId": 187
+    },
+    {
+      "slug": "daihatsu",
+      "label": "Daihatsu",
+      "categoryId": 1349
+    },
+    {
+      "slug": "denza",
+      "label": "Denza",
+      "categoryId": 5197
+    },
+    {
+      "slug": "dfsk",
+      "label": "Dfsk",
+      "categoryId": 4888
+    },
+    {
+      "slug": "dodge",
+      "label": "Dodge",
+      "categoryId": 1343
+    },
+    {
+      "slug": "dolnoslaskie",
+      "label": "Dolnoslaskie",
+      "categoryId": 207
+    },
+    {
+      "slug": "dr-motor",
+      "label": "Dr-Motor",
+      "categoryId": 5445
+    },
+    {
+      "slug": "ds-automobiles",
+      "label": "Ds-Automobiles",
+      "categoryId": 4889
+    },
+    {
+      "slug": "elaris",
+      "label": "Elaris",
+      "categoryId": 2961
+    },
+    {
+      "slug": "ferrari",
+      "label": "Ferrari",
+      "categoryId": 4892
+    },
+    {
+      "slug": "fiat",
+      "label": "Fiat",
+      "categoryId": 188
+    },
+    {
+      "slug": "ford",
+      "label": "Ford",
+      "categoryId": 189
+    },
+    {
+      "slug": "forthing",
+      "label": "Forthing",
+      "categoryId": 4893
+    },
+    {
+      "slug": "gac",
+      "label": "Gac",
+      "categoryId": 5476
+    },
+    {
+      "slug": "geely",
+      "label": "Geely",
+      "categoryId": 5187
+    },
+    {
+      "slug": "genesis",
+      "label": "Genesis",
+      "categoryId": 4894
+    },
+    {
+      "slug": "gmc",
+      "label": "Gmc",
+      "categoryId": 4895
+    },
+    {
+      "slug": "honda",
+      "label": "Honda",
+      "categoryId": 190
+    },
+    {
+      "slug": "hongqi",
+      "label": "Hongqi",
+      "categoryId": 4896
+    },
+    {
+      "slug": "hummer",
+      "label": "Hummer",
+      "categoryId": 4897
+    },
+    {
+      "slug": "hyundai",
+      "label": "Hyundai",
+      "categoryId": 191
+    },
+    {
+      "slug": "ich-x",
+      "label": "Ich-X",
+      "categoryId": 5446
+    },
+    {
+      "slug": "ineos",
+      "label": "Ineos",
+      "categoryId": 4898
+    },
+    {
+      "slug": "infiniti",
+      "label": "Infiniti",
+      "categoryId": 1554
+    },
+    {
+      "slug": "isuzu",
+      "label": "Isuzu",
+      "categoryId": 4899
+    },
+    {
+      "slug": "iveco",
+      "label": "Iveco",
+      "categoryId": 4900
+    },
+    {
+      "slug": "jaecoo",
+      "label": "Jaecoo",
+      "categoryId": 4868
+    },
+    {
+      "slug": "jaguar",
+      "label": "Jaguar",
+      "categoryId": 1345
+    },
+    {
+      "slug": "jeep",
+      "label": "Jeep",
+      "categoryId": 1221
+    },
+    {
+      "slug": "kia",
+      "label": "Kia",
+      "categoryId": 192
+    },
+    {
+      "slug": "kujawsko-pomorskie",
+      "label": "Kujawsko-Pomorskie",
+      "categoryId": 189
+    },
+    {
+      "slug": "lada",
+      "label": "Lada",
+      "categoryId": 4901
+    },
+    {
+      "slug": "lamborghini",
+      "label": "Lamborghini",
+      "categoryId": 4902
+    },
+    {
+      "slug": "lancia",
+      "label": "Lancia",
+      "categoryId": 193
+    },
+    {
+      "slug": "landrover",
+      "label": "Landrover",
+      "categoryId": 1219
+    },
+    {
+      "slug": "leapmotor",
+      "label": "Leapmotor",
+      "categoryId": 4952
+    },
+    {
+      "slug": "lexus",
+      "label": "Lexus",
+      "categoryId": 1351
+    },
+    {
+      "slug": "ligier",
+      "label": "Ligier",
+      "categoryId": 4904
+    },
+    {
+      "slug": "lincoln",
+      "label": "Lincoln",
+      "categoryId": 4905
+    },
+    {
+      "slug": "lodzkie",
+      "label": "Lodzkie",
+      "categoryId": 207
+    },
+    {
+      "slug": "lotus",
+      "label": "Lotus",
+      "categoryId": 4953
+    },
+    {
+      "slug": "lubelskie",
+      "label": "Lubelskie",
+      "categoryId": 182
+    },
+    {
+      "slug": "lubuskie",
+      "label": "Lubuskie",
+      "categoryId": 182
+    },
+    {
+      "slug": "lucid",
+      "label": "Lucid",
+      "categoryId": 4954
+    },
+    {
+      "slug": "lynk-and-co",
+      "label": "Lynk-And-Co",
+      "categoryId": 4955
+    },
+    {
+      "slug": "maextro",
+      "label": "Maextro",
+      "categoryId": 2961
+    },
+    {
+      "slug": "malopolskie",
+      "label": "Malopolskie",
+      "categoryId": 207
+    },
+    {
+      "slug": "maserati",
+      "label": "Maserati",
+      "categoryId": 4906
+    },
+    {
+      "slug": "maxus",
+      "label": "Maxus",
+      "categoryId": 4907
+    },
+    {
+      "slug": "mazda",
+      "label": "Mazda",
+      "categoryId": 194
+    },
+    {
+      "slug": "mazowieckie",
+      "label": "Mazowieckie",
+      "categoryId": 207
+    },
+    {
+      "slug": "mclaren",
+      "label": "Mclaren",
+      "categoryId": 4909
+    },
+    {
+      "slug": "mercedes-benz",
+      "label": "Mercedes-Benz",
+      "categoryId": 195
+    },
+    {
+      "slug": "mg",
+      "label": "Mg",
+      "categoryId": 4875
+    },
+    {
+      "slug": "microcar",
+      "label": "Microcar",
+      "categoryId": 4933
+    },
+    {
+      "slug": "mini",
+      "label": "Mini",
+      "categoryId": 1339
+    },
+    {
+      "slug": "mitsubishi",
+      "label": "Mitsubishi",
+      "categoryId": 196
+    },
+    {
+      "slug": "nissan",
+      "label": "Nissan",
+      "categoryId": 197
+    },
+    {
+      "slug": "omoda",
+      "label": "Omoda",
+      "categoryId": 4869
+    },
+    {
+      "slug": "opel",
+      "label": "Opel",
+      "categoryId": 198
+    },
+    {
+      "slug": "opolskie",
+      "label": "Opolskie",
+      "categoryId": 189
+    },
+    {
+      "slug": "peugeot",
+      "label": "Peugeot",
+      "categoryId": 199
+    },
+    {
+      "slug": "podkarpackie",
+      "label": "Podkarpackie",
+      "categoryId": 183
+    },
+    {
+      "slug": "podlaskie",
+      "label": "Podlaskie",
+      "categoryId": 200
+    },
+    {
+      "slug": "polonez",
+      "label": "Polonez",
+      "categoryId": 1257
+    },
+    {
+      "slug": "pomorskie",
+      "label": "Pomorskie",
+      "categoryId": 207
+    },
+    {
+      "slug": "pontiac",
+      "label": "Pontiac",
+      "categoryId": 4934
+    },
+    {
+      "slug": "porsche",
+      "label": "Porsche",
+      "categoryId": 1341
+    },
+    {
+      "slug": "pozostale",
+      "label": "Pozostale",
+      "categoryId": 209
+    },
+    {
+      "slug": "ram",
+      "label": "Ram",
+      "categoryId": 4935
+    },
+    {
+      "slug": "renault",
+      "label": "Renault",
+      "categoryId": 200
+    },
+    {
+      "slug": "rolls-royce",
+      "label": "Rolls-Royce",
+      "categoryId": 4949
+    },
+    {
+      "slug": "rover",
+      "label": "Rover",
+      "categoryId": 296
+    },
+    {
+      "slug": "saab",
+      "label": "Saab",
+      "categoryId": 201
+    },
+    {
+      "slug": "seat",
+      "label": "Seat",
+      "categoryId": 202
+    },
+    {
+      "slug": "skoda",
+      "label": "Skoda",
+      "categoryId": 203
+    },
+    {
+      "slug": "slaskie",
+      "label": "Slaskie",
+      "categoryId": 189
+    },
+    {
+      "slug": "smart",
+      "label": "Smart",
+      "categoryId": 1337
+    },
+    {
+      "slug": "sportequipe",
+      "label": "Sportequipe",
+      "categoryId": 5470
+    },
+    {
+      "slug": "ssangyong",
+      "label": "Ssangyong",
+      "categoryId": 1558
+    },
+    {
+      "slug": "subaru",
+      "label": "Subaru",
+      "categoryId": 204
+    },
+    {
+      "slug": "suzuki",
+      "label": "Suzuki",
+      "categoryId": 205
+    },
+    {
+      "slug": "swietokrzyskie",
+      "label": "Swietokrzyskie",
+      "categoryId": 183
+    },
+    {
+      "slug": "swm",
+      "label": "Swm",
+      "categoryId": 5214
+    },
+    {
+      "slug": "tesla",
+      "label": "Tesla",
+      "categoryId": 4950
+    },
+    {
+      "slug": "toyota",
+      "label": "Toyota",
+      "categoryId": 206
+    },
+    {
+      "slug": "volkswagen",
+      "label": "Volkswagen",
+      "categoryId": 207
+    },
+    {
+      "slug": "volvo",
+      "label": "Volvo",
+      "categoryId": 208
+    },
+    {
+      "slug": "warminsko-mazurskie",
+      "label": "Warminsko-Mazurskie",
+      "categoryId": 207
+    },
+    {
+      "slug": "wielkopolskie",
+      "label": "Wielkopolskie",
+      "categoryId": 183
+    },
+    {
+      "slug": "xpeng",
+      "label": "Xpeng",
+      "categoryId": 5474
+    },
+    {
+      "slug": "zachodniopomorskie",
+      "label": "Zachodniopomorskie",
+      "categoryId": 183
+    },
+    {
+      "slug": "zeekr",
+      "label": "Zeekr",
+      "categoryId": 5471
+    },
+    {
+      "slug": "zhidou",
+      "label": "Zhidou",
+      "categoryId": 4951
+    }
+  ]
+}

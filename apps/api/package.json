@@ -14,7 +14,9 @@
     "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "scrape:test": "tsx --env-file=../../.env src/scripts/test-scraper.ts",
-    "taxonomy:build": "tsx --env-file=../../.env src/scripts/build-taxonomy.ts"
+    "taxonomy:build": "tsx --env-file=../../.env src/scripts/build-taxonomy.ts",
+    "taxonomy:olx": "tsx --env-file=../../.env src/scripts/build-olx-taxonomy.ts",
+    "olx:test": "tsx --env-file=../../.env src/scripts/test-olx.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

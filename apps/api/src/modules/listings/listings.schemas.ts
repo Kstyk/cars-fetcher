@@ -28,7 +28,7 @@ export const listingSortValues = [
 export const listingQuerySchema = paginationSchema.extend({
   groupId: z.string().uuid().optional(),
   filterId: z.string().uuid().optional(),
-  provider: z.enum(providerValues).optional(),
+  provider: csvArray(providerValues),
   q: z.string().trim().max(200).optional(),
   make: z.string().trim().max(60).optional(),
   model: z.string().trim().max(80).optional(),

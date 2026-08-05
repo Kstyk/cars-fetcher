@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-export const providerValues = ['otomoto', 'olx', 'mobile_de', 'autoscout24'] as const;
+export const providerValues = [
+  'otomoto',
+  'olx',
+  'autoplac',
+  'findcar',
+  'mobile_de',
+  'autoscout24',
+] as const;
 export const fuelTypeValues = [
   'petrol',
   'petrol_lpg',

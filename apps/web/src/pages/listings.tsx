@@ -13,8 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Combobox, MultiCombobox } from '@/components/ui/combobox';
-import { FUEL_LABELS, GEARBOX_LABELS } from '@/lib/format';
-import { useFilterGroups, useListings, useTaxonomy } from '@/lib/queries';
+import { BODY_LABELS, FUEL_LABELS, GEARBOX_LABELS } from '@/lib/format';
+import {
+  useFilterGroups,
+  useListings,
+  useProviders,
+  useTaxonomy,
+} from '@/lib/queries';
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Najnowsze' },
@@ -29,6 +34,7 @@ const ALL = '__all__';
 interface Filters {
   q: string;
   groupId: string;
+  provider: string[];
   make: string | null;
   model: string | null;
   fuelType: string;
@@ -39,12 +45,15 @@ interface Filters {
   mileageTo: string;
   powerFrom: string;
   countryOrigin: string[];
+  color: string[];
+  bodyType: string;
   sort: string;
 }
 
 const EMPTY_FILTERS: Filters = {
   q: '',
   groupId: ALL,
+  provider: [],
   make: null,
   model: null,
   fuelType: ALL,
@@ -55,6 +64,8 @@ const EMPTY_FILTERS: Filters = {
   mileageTo: '',
   powerFrom: '',
   countryOrigin: [],
+  color: [],
+  bodyType: ALL,
   sort: 'newest',
 };
 
@@ -63,13 +74,21 @@ export function ListingsPage() {
   const [page, setPage] = useState(1);
   const groups = useFilterGroups();
   const taxonomy = useTaxonomy();
+  const providers = useProviders();
 
   // Listings store display names ("Volvo", "Niemcy"), not provider slugs, so
   // the option value has to be the label.
   const countryOptions =
     taxonomy.data?.countries.map(({ label }) => ({ value: label, label })) ?? [];
+  const colorOptions =
+    taxonomy.data?.colors.map(({ label }) => ({ value: label, label })) ?? [];
   const makeOptions =
     taxonomy.data?.makes.map(({ label }) => ({ value: label, label })) ?? [];
+  // Only providers with a working adapter can have produced any listing.
+  const providerOptions =
+    providers.data
+      ?.filter((entry) => entry.implemented)
+      .map((entry) => ({ value: entry.provider, label: entry.label })) ?? [];
   const modelOptions =
     taxonomy.data?.makes
       .find((make) => make.label === filters.make)
@@ -81,6 +100,7 @@ export function ListingsPage() {
     sort: filters.sort,
     ...(filters.q ? { q: filters.q } : {}),
     ...(filters.groupId !== ALL ? { groupId: filters.groupId } : {}),
+    ...(filters.provider.length ? { provider: filters.provider } : {}),
     ...(filters.make ? { make: filters.make } : {}),
     ...(filters.model ? { model: filters.model } : {}),
     ...(filters.fuelType !== ALL ? { fuelType: filters.fuelType } : {}),
@@ -91,6 +111,8 @@ export function ListingsPage() {
     ...(filters.mileageTo ? { mileageTo: filters.mileageTo } : {}),
     ...(filters.powerFrom ? { powerFrom: filters.powerFrom } : {}),
     ...(filters.countryOrigin.length ? { countryOrigin: filters.countryOrigin } : {}),
+    ...(filters.color.length ? { color: filters.color } : {}),
+    ...(filters.bodyType !== ALL ? { bodyType: filters.bodyType } : {}),
   };
 
   const listings = useListings(params);
@@ -147,6 +169,16 @@ export function ListingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="w-44 space-y-1.5">
+            <Label>Serwis</Label>
+            <MultiCombobox
+              options={providerOptions}
+              values={filters.provider}
+              placeholder="Wszystkie"
+              onChange={(v) => update('provider', v)}
+            />
           </div>
 
           <div className="w-44 space-y-1.5">
@@ -245,6 +277,40 @@ export function ListingsPage() {
               options={countryOptions}
               values={filters.countryOrigin}
               onChange={(v) => update('countryOrigin', v)}
+            />
+          </div>
+
+          {/*
+            Body type and colour only reach the database through OLX - the
+            Otomoto search payload omits them, so those listings drop out when
+            either filter is used.
+          */}
+          <div className="space-y-1.5">
+            <Label>Nadwozie</Label>
+            <Select
+              value={filters.bodyType}
+              onValueChange={(v) => update('bodyType', v)}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Dowolne" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Dowolne</SelectItem>
+                {Object.entries(BODY_LABELS).map(([value, text]) => (
+                  <SelectItem key={value} value={value}>
+                    {text}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-40 space-y-1.5">
+            <Label>Kolor</Label>
+            <MultiCombobox
+              options={colorOptions}
+              values={filters.color}
+              onChange={(v) => update('color', v)}
             />
           </div>
 

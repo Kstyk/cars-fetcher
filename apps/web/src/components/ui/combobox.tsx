@@ -74,6 +74,11 @@ export function Combobox({
 
   return (
     <Popover
+      // `modal` gives the popover its own scroll lock. Without it a popover
+      // opened inside a Dialog inherits the dialog's react-remove-scroll,
+      // which swallows wheel events - the list could only be dragged by its
+      // scrollbar.
+      modal
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -110,7 +115,7 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)]">
+      <PopoverContent className="w-(--radix-popover-trigger-width)">
         <div className="relative border-b p-2">
           <SearchIcon className="text-muted-foreground absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />
           <Input
@@ -200,7 +205,7 @@ export function MultiCombobox({
         : `Wybrano: ${values.length}`;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -216,7 +221,7 @@ export function MultiCombobox({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)]">
+      <PopoverContent className="w-(--radix-popover-trigger-width)">
         {options.length > 8 ? (
           <div className="relative border-b p-2">
             <SearchIcon className="text-muted-foreground absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />

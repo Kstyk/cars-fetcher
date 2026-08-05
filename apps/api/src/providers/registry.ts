@@ -1,20 +1,35 @@
 import { env, otomotoConfigured } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { fixtureSource } from './fixture/fixture.source.js';
+import { olxSource } from './olx/olx.source.js';
 import { otomotoScraperSource } from './otomoto/otomoto-scraper.source.js';
 import { otomotoSource } from './otomoto/otomoto.source.js';
+import { UnimplementedSource } from './unimplemented.source.js';
 import type { ListingSource, ProviderName } from './types.js';
 
 /**
  * Resolves the adapter for a provider.
  *
- * Adding autoplac.pl or OLX means writing one `ListingSource` (reusing
+ * Adding a marketplace means writing one `ListingSource` (reusing
  * `providers/scraping/*` for throttling and robots.txt) and registering it
  * here - nothing else in the application changes.
  */
 const sources = new Map<ProviderName, ListingSource>();
 
 sources.set('otomoto', resolveOtomotoSource());
+sources.set('olx', olxSource);
+sources.set('autoplac', new UnimplementedSource('autoplac', 'autoplac.pl'));
+sources.set('findcar', new UnimplementedSource('findcar', 'FindCar'));
+
+/** Human-readable names for the provider picker in the UI. */
+const PROVIDER_LABELS: Record<ProviderName, string> = {
+  otomoto: 'Otomoto',
+  olx: 'OLX',
+  autoplac: 'autoplac.pl',
+  findcar: 'FindCar',
+  mobile_de: 'mobile.de',
+  autoscout24: 'AutoScout24',
+};
 
 function resolveOtomotoSource(): ListingSource {
   switch (env.OTOMOTO_SOURCE) {
@@ -53,16 +68,27 @@ export function getSource(provider: ProviderName): ListingSource {
   return source;
 }
 
-export function listProviders(): Array<{
+export interface ProviderInfo {
   provider: ProviderName;
-  mode: string;
+  label: string;
+  /** False for providers that are listed but have no adapter yet. */
+  implemented: boolean;
   configured: boolean;
+  /** False when the fixture generator stands in for a real source. */
   live: boolean;
-}> {
-  return [...sources.entries()].map(([provider, source]) => ({
-    provider,
-    mode: provider === 'otomoto' ? env.OTOMOTO_SOURCE : 'scraper',
-    configured: source.isConfigured(),
-    live: source !== fixtureSource,
-  }));
+  mode?: string;
+}
+
+export function listProviders(): ProviderInfo[] {
+  return [...sources.entries()].map(([provider, source]) => {
+    const implemented = !(source instanceof UnimplementedSource);
+    return {
+      provider,
+      label: PROVIDER_LABELS[provider],
+      implemented,
+      configured: source.isConfigured(),
+      live: implemented && source !== fixtureSource,
+      ...(provider === 'otomoto' ? { mode: env.OTOMOTO_SOURCE } : {}),
+    };
+  });
 }

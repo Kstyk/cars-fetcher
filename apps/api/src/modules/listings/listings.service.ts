@@ -88,7 +88,9 @@ export async function searchListings(
   ];
 
   if (!query.includeInactive) conditions.push(eq(listings.isActive, true));
-  if (query.provider) conditions.push(eq(listings.provider, query.provider));
+  if (query.provider?.length) {
+    conditions.push(inArray(listings.provider, query.provider));
+  }
   if (query.make) conditions.push(ilike(listings.make, query.make));
   if (query.model) conditions.push(ilike(listings.model, query.model));
   if (query.priceFrom !== undefined) conditions.push(gte(listings.price, query.priceFrom));

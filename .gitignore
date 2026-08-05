@@ -11,3 +11,8 @@ Thumbs.db
 !.vscode/extensions.json
 coverage/
 .turbo/
+
+# Emitted JS must never sit next to the TSX sources - Vite resolves .js
+# before .tsx and would silently serve stale compiled output.
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map

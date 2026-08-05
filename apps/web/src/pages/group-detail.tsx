@@ -1,18 +1,23 @@
 import { Link, useParams } from '@tanstack/react-router';
 import {
   ArrowLeftIcon,
+  CopyIcon,
   Loader2Icon,
+  PencilIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   EMPTY_FILTER_FORM,
   FilterForm,
+  FilterSummary,
+  filterToFormValue,
   toFilterPayload,
   type FilterFormValue,
 } from '@/components/filter-form';
+import { EditGroupDialog } from '@/components/edit-group-dialog';
 import { ListingCard } from '@/components/listing-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,7 +38,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/misc';
-import { FUEL_LABELS, formatDateTime, formatRelative, label } from '@/lib/format';
+import { formatDateTime, formatRelative } from '@/lib/format';
 import {
   useAddFilter,
   useDeleteFilter,
@@ -52,6 +57,14 @@ export function GroupDetailPage() {
   const fetchGroup = useFetchGroup();
   const deleteFilter = useDeleteFilter(groupId);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [editGroupOpen, setEditGroupOpen] = useState(false);
+  // Seeds the "add filter" dialog - either blank, or a copy of an existing row.
+  const [filterDraft, setFilterDraft] = useState<FilterFormValue>(EMPTY_FILTER_FORM);
+
+  function openBlankFilterDialog(): void {
+    setFilterDraft(EMPTY_FILTER_FORM);
+    setFilterDialogOpen(true);
+  }
 
   if (group.isLoading) {
     return <Skeleton className="h-96" />;
@@ -103,7 +116,11 @@ export function GroupDetailPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setFilterDialogOpen(true)}>
+          <Button variant="outline" onClick={() => setEditGroupOpen(true)}>
+            <PencilIcon />
+            Edytuj grupę
+          </Button>
+          <Button variant="outline" onClick={openBlankFilterDialog}>
             <PlusIcon />
             Dodaj filtr
           </Button>
@@ -159,39 +176,37 @@ export function GroupDetailPage() {
         <TabsContent value="filters" className="space-y-3 pt-6">
           {group.data.filters.map((filter) => (
             <Card key={filter.id}>
-              <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-                <div className="min-w-0 space-y-1">
+              <CardContent className="flex flex-wrap items-start justify-between gap-4 py-4">
+                <div className="min-w-0 flex-1 space-y-2">
                   <p className="font-medium">
                     {filter.name ??
                       [filter.make, filter.model].filter(Boolean).join(' ') ??
                       'Filtr'}
                   </p>
-                  <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    {filter.make ? <span>Marka: {filter.make}</span> : null}
-                    {filter.model ? <span>Model: {filter.model}</span> : null}
-                    {filter.yearFrom ? <span>Rocznik od: {filter.yearFrom}</span> : null}
-                    {filter.priceTo ? (
-                      <span>Cena do: {filter.priceTo.toLocaleString('pl-PL')} zł</span>
-                    ) : null}
-                    {filter.mileageTo ? (
-                      <span>Przebieg do: {filter.mileageTo.toLocaleString('pl-PL')} km</span>
-                    ) : null}
-                    {filter.fuelTypes?.length ? (
-                      <span>
-                        Paliwo:{' '}
-                        {filter.fuelTypes.map((f) => label(FUEL_LABELS, f)).join(', ')}
-                      </span>
-                    ) : null}
-                  </div>
+                  <FilterSummary filter={filter} />
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Usuń filtr"
-                  onClick={() => deleteFilter.mutate(filter.id)}
-                >
-                  <Trash2Icon className="text-destructive" />
-                </Button>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Duplikuj filtr"
+                    title="Utwórz nowy filtr na bazie tego"
+                    onClick={() => {
+                      setFilterDraft(filterToFormValue(filter));
+                      setFilterDialogOpen(true);
+                    }}
+                  >
+                    <CopyIcon />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Usuń filtr"
+                    onClick={() => deleteFilter.mutate(filter.id)}
+                  >
+                    <Trash2Icon className="text-destructive" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -200,7 +215,7 @@ export function GroupDetailPage() {
               title="Brak filtrów"
               description="Dodaj filtr, aby grupa zaczęła zbierać oferty."
               action={
-                <Button onClick={() => setFilterDialogOpen(true)}>
+                <Button onClick={openBlankFilterDialog}>
                   <PlusIcon />
                   Dodaj filtr
                 </Button>
@@ -281,6 +296,13 @@ export function GroupDetailPage() {
         groupId={groupId}
         open={filterDialogOpen}
         onOpenChange={setFilterDialogOpen}
+        initialValue={filterDraft}
+      />
+
+      <EditGroupDialog
+        group={group.data}
+        open={editGroupOpen}
+        onOpenChange={setEditGroupOpen}
       />
     </div>
   );
@@ -290,14 +312,24 @@ function AddFilterDialog({
   groupId,
   open,
   onOpenChange,
+  initialValue,
 }: {
   groupId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialValue: FilterFormValue;
 }) {
   const addFilter = useAddFilter(groupId);
-  const [form, setForm] = useState<FilterFormValue>(EMPTY_FILTER_FORM);
+  const [form, setForm] = useState<FilterFormValue>(initialValue);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-seed whenever the dialog opens, so duplicating picks up the source row.
+  useEffect(() => {
+    if (open) {
+      setForm(initialValue);
+      setError(null);
+    }
+  }, [open, initialValue]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -305,19 +337,22 @@ function AddFilterDialog({
     try {
       await addFilter.mutateAsync(toFilterPayload(form));
       onOpenChange(false);
-      setForm(EMPTY_FILTER_FORM);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nie udało się dodać filtra');
     }
   }
 
+  const isCopy = initialValue !== EMPTY_FILTER_FORM;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Nowy filtr</DialogTitle>
+          <DialogTitle>{isCopy ? 'Nowy filtr (kopia)' : 'Nowy filtr'}</DialogTitle>
           <DialogDescription>
-            Puste pole oznacza brak ograniczenia.
+            {isCopy
+              ? 'Kryteria skopiowane z istniejącego filtra — zmień, co trzeba.'
+              : 'Puste pole oznacza brak ograniczenia.'}
           </DialogDescription>
         </DialogHeader>
 
