@@ -581,6 +581,35 @@ export const providerTokens = pgTable('provider_tokens', {
     .defaultNow(),
 });
 
+/**
+ * Geocoded place names. No provider returns coordinates, so radius search
+ * depends on resolving `city` + `region` once and reusing the result.
+ */
+export const geoLocations = pgTable(
+  'geo_locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    city: varchar('city', { length: 120 }).notNull(),
+    region: varchar('region', { length: 80 }),
+    latitude: numeric('latitude', { precision: 9, scale: 6, mode: 'number' }),
+    longitude: numeric('longitude', { precision: 9, scale: 6, mode: 'number' }),
+    /** Where the coordinates came from, e.g. "nominatim". */
+    source: varchar('source', { length: 40 }).notNull().default('nominatim'),
+    /** Set even when lookup failed, so a miss is not retried on every fetch. */
+    resolvedAt: timestamp('resolved_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Null coordinates plus a failure count means "we tried and could not". */
+    failedAttempts: smallint('failed_attempts').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('geo_locations_place_unique').on(
+      sql`lower(${t.city})`,
+      sql`coalesce(lower(${t.region}), '')`,
+    ),
+  ],
+);
+
 /** One row per filter execution - the audit trail behind "ostatnie pobranie". */
 export const fetchRuns = pgTable(
   'fetch_runs',

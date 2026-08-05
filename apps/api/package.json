@@ -17,7 +17,9 @@
     "taxonomy:build": "tsx --env-file=../../.env src/scripts/build-taxonomy.ts",
     "taxonomy:olx": "tsx --env-file=../../.env src/scripts/build-olx-taxonomy.ts",
     "olx:test": "tsx --env-file=../../.env src/scripts/test-olx.ts",
-    "autoplac:test": "tsx --env-file=../../.env src/scripts/test-autoplac.ts"
+    "autoplac:test": "tsx --env-file=../../.env src/scripts/test-autoplac.ts",
+    "geo:backfill": "tsx --env-file=../../.env src/scripts/backfill-geo.ts",
+    "findcar:test": "tsx --env-file=../../.env src/scripts/test-findcar.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

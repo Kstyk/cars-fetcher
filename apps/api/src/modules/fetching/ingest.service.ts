@@ -7,7 +7,9 @@ import {
   listings,
   type Listing,
 } from '../../db/schema.js';
+import { normalizeVoivodeship } from '../../lib/regions.js';
 import type { NormalizedListing } from '../../providers/types.js';
+import { lookupCached } from '../geo/geocoding.service.js';
 
 export interface IngestContext {
   filterId: string;
@@ -83,6 +85,13 @@ async function ingestOne(
 ): Promise<IngestOutcome> {
   const now = new Date();
 
+  // Cache-only lookup: no provider returns coordinates, and the ingest path
+  // must not wait on a geocoding request. Misses are filled by `geo:backfill`.
+  const coordinates =
+    item.latitude !== null && item.latitude !== undefined
+      ? null
+      : await lookupCached(item.city, item.region);
+
   return db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: listings.id, price: listings.price, currency: listings.currency })
@@ -95,7 +104,7 @@ async function ingestOne(
       )
       .limit(1);
 
-    const values = toListingRow(item, now);
+    const values = toListingRow(item, now, coordinates);
 
     const [saved] = await tx
       .insert(listings)
@@ -173,6 +182,7 @@ async function ingestOne(
 function toListingRow(
   item: NormalizedListing,
   now: Date,
+  coordinates: { latitude: number; longitude: number } | null,
 ): typeof listings.$inferInsert {
   return {
     provider: item.provider,
@@ -206,10 +216,11 @@ function toListingRow(
     sellerType: item.sellerType,
     sellerName: item.sellerName ?? null,
     city: item.city ?? null,
-    region: item.region ?? null,
+    // Providers disagree on spelling ("Kujawsko pomorskie" vs "-pomorskie").
+    region: normalizeVoivodeship(item.region),
     country: item.country ?? null,
-    latitude: item.latitude ?? null,
-    longitude: item.longitude ?? null,
+    latitude: item.latitude ?? coordinates?.latitude ?? null,
+    longitude: item.longitude ?? coordinates?.longitude ?? null,
     thumbnailUrl: item.thumbnailUrl ?? null,
     imagesCount: item.imagesCount ?? null,
     publishedAt: item.publishedAt ?? null,

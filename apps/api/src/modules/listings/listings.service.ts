@@ -24,6 +24,7 @@ import {
 } from '../../db/schema.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { paginate, type Paginated } from '../../lib/pagination.js';
+import { geocode } from '../geo/geocoding.service.js';
 import type { ListingQuery } from './listings.schemas.js';
 
 export interface ListingView {
@@ -65,6 +66,22 @@ export interface ListingView {
  * Reads listings out of our own database - the fetcher is what talks to
  * providers. Every result is scoped to groups owned by the caller.
  */
+/**
+ * Where a radius search is centred. An explicit pin from the map takes
+ * precedence; otherwise the city name is geocoded (cache first, network only
+ * for a city we have never seen).
+ */
+async function resolveAnchor(
+  query: ListingQuery,
+): Promise<{ latitude: number; longitude: number } | null> {
+  if (query.lat !== undefined && query.lon !== undefined) {
+    return { latitude: query.lat, longitude: query.lon };
+  }
+  if (!query.city || !query.radiusKm) return null;
+
+  return geocode(query.city, query.region?.[0] ?? null);
+}
+
 export async function searchListings(
   userId: string,
   query: ListingQuery,
@@ -117,6 +134,30 @@ export async function searchListings(
   }
   if (query.powerTo !== undefined) {
     conditions.push(lte(listings.enginePowerHp, query.powerTo));
+  }
+
+  if (query.region?.length) {
+    conditions.push(inArray(listings.region, query.region));
+  }
+
+  // Radius search: an explicit pin wins, otherwise the named city is geocoded.
+  const anchor = await resolveAnchor(query);
+  if (anchor && query.radiusKm) {
+    // Great-circle distance in kilometres. Listings without coordinates cannot
+    // be placed on a map, so they are excluded rather than silently kept.
+    conditions.push(sql`
+      ${listings.latitude} IS NOT NULL AND ${listings.longitude} IS NOT NULL
+      AND 6371 * acos(
+        least(1, greatest(-1,
+          sin(radians(${anchor.latitude})) * sin(radians(${listings.latitude}))
+          + cos(radians(${anchor.latitude})) * cos(radians(${listings.latitude}))
+            * cos(radians(${listings.longitude}) - radians(${anchor.longitude}))
+        ))
+      ) <= ${query.radiusKm}
+    `);
+  } else if (query.city) {
+    // No radius (or no coordinates for that city) - fall back to a name match.
+    conditions.push(ilike(listings.city, query.city));
   }
 
   if (query.q) {
@@ -216,10 +257,20 @@ export async function searchListings(
   return paginate(rows as ListingView[], totals?.value ?? 0, query);
 }
 
+/**
+ * "Newest" means when the advert appeared on the marketplace, not when we
+ * scraped it - a filter added today would otherwise report years-old cars as
+ * brand new. `first_seen_at` is the fallback for providers that omit the date,
+ * and stays available as its own sort option.
+ */
+const PUBLISHED_AT = sql`coalesce(${listings.publishedAt}, ${listings.firstSeenAt})`;
+
 function orderBy(sort: ListingQuery['sort']): SQL[] {
   switch (sort) {
     case 'oldest':
-      return [asc(listings.firstSeenAt)];
+      return [sql`${PUBLISHED_AT} asc`];
+    case 'added_newest':
+      return [desc(listings.firstSeenAt)];
     case 'price_asc':
       return [sql`${listings.price} asc nulls last`, desc(listings.firstSeenAt)];
     case 'price_desc':
@@ -230,7 +281,7 @@ function orderBy(sort: ListingQuery['sort']): SQL[] {
       return [sql`${listings.year} desc nulls last`];
     case 'newest':
     default:
-      return [desc(listings.firstSeenAt)];
+      return [sql`${PUBLISHED_AT} desc`];
   }
 }
 
@@ -289,6 +340,35 @@ export async function getListing(userId: string, listingId: string) {
     matchedGroups,
     favorite: favorite[0] ?? null,
   };
+}
+
+/** Cities present in the caller's listings, for the location filter select. */
+export async function listCities(userId: string) {
+  const rows = await db
+    .selectDistinct({ city: listings.city, region: listings.region })
+    .from(listings)
+    .where(
+      and(
+        sql`${listings.city} IS NOT NULL`,
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(listingMatches)
+            .innerJoin(filterGroups, eq(filterGroups.id, listingMatches.groupId))
+            .where(
+              and(
+                eq(listingMatches.listingId, listings.id),
+                eq(filterGroups.userId, userId),
+              ),
+            ),
+        ),
+      ),
+    )
+    .orderBy(asc(listings.city));
+
+  return rows.filter((row): row is { city: string; region: string | null } =>
+    Boolean(row.city),
+  );
 }
 
 /* ------------------------------- favourites ------------------------------ */

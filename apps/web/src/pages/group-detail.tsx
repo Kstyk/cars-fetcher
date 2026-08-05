@@ -46,6 +46,7 @@ import {
   useFilterGroup,
   useGroupRuns,
   useListings,
+  useUpdateFilter,
 } from '@/lib/queries';
 
 export function GroupDetailPage() {
@@ -58,13 +59,22 @@ export function GroupDetailPage() {
   const deleteFilter = useDeleteFilter(groupId);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState(false);
-  // Seeds the "add filter" dialog - either blank, or a copy of an existing row.
+  // Seeds the filter dialog: blank, a copy of a row, or the row being edited.
   const [filterDraft, setFilterDraft] = useState<FilterFormValue>(EMPTY_FILTER_FORM);
+  const [editingFilterId, setEditingFilterId] = useState<string | null>(null);
+  const [isCopy, setIsCopy] = useState(false);
 
-  function openBlankFilterDialog(): void {
-    setFilterDraft(EMPTY_FILTER_FORM);
+  function openFilterDialog(
+    draft: FilterFormValue,
+    options: { editingId?: string; copy?: boolean } = {},
+  ): void {
+    setFilterDraft(draft);
+    setEditingFilterId(options.editingId ?? null);
+    setIsCopy(options.copy ?? false);
     setFilterDialogOpen(true);
   }
+
+  const openBlankFilterDialog = () => openFilterDialog(EMPTY_FILTER_FORM);
 
   if (group.isLoading) {
     return <Skeleton className="h-96" />;
@@ -189,12 +199,24 @@ export function GroupDetailPage() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    aria-label="Edytuj filtr"
+                    title="Edytuj ten filtr"
+                    onClick={() =>
+                      openFilterDialog(filterToFormValue(filter), {
+                        editingId: filter.id,
+                      })
+                    }
+                  >
+                    <PencilIcon />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     aria-label="Duplikuj filtr"
                     title="Utwórz nowy filtr na bazie tego"
-                    onClick={() => {
-                      setFilterDraft(filterToFormValue(filter));
-                      setFilterDialogOpen(true);
-                    }}
+                    onClick={() =>
+                      openFilterDialog(filterToFormValue(filter), { copy: true })
+                    }
                   >
                     <CopyIcon />
                   </Button>
@@ -292,11 +314,13 @@ export function GroupDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <AddFilterDialog
+      <FilterDialog
         groupId={groupId}
         open={filterDialogOpen}
         onOpenChange={setFilterDialogOpen}
         initialValue={filterDraft}
+        editingId={editingFilterId}
+        isCopy={isCopy}
       />
 
       <EditGroupDialog
@@ -308,22 +332,29 @@ export function GroupDetailPage() {
   );
 }
 
-function AddFilterDialog({
+/** Mode is implied by `editingId`: set means edit, absent means create. */
+function FilterDialog({
   groupId,
   open,
   onOpenChange,
   initialValue,
+  editingId,
+  isCopy,
 }: {
   groupId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialValue: FilterFormValue;
+  editingId: string | null;
+  isCopy: boolean;
 }) {
   const addFilter = useAddFilter(groupId);
+  const updateFilter = useUpdateFilter(groupId);
   const [form, setForm] = useState<FilterFormValue>(initialValue);
   const [error, setError] = useState<string | null>(null);
 
-  // Re-seed whenever the dialog opens, so duplicating picks up the source row.
+  // Re-seed whenever the dialog opens, so editing and duplicating pick up the
+  // source row rather than whatever was last typed.
   useEffect(() => {
     if (open) {
       setForm(initialValue);
@@ -331,24 +362,35 @@ function AddFilterDialog({
     }
   }, [open, initialValue]);
 
+  const pending = addFilter.isPending || updateFilter.isPending;
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     try {
-      await addFilter.mutateAsync(toFilterPayload(form));
+      const payload = toFilterPayload(form);
+      if (editingId) {
+        await updateFilter.mutateAsync({ filterId: editingId, input: payload });
+      } else {
+        await addFilter.mutateAsync(payload);
+      }
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nie udało się dodać filtra');
+      setError(err instanceof Error ? err.message : 'Nie udało się zapisać filtra');
     }
   }
 
-  const isCopy = initialValue !== EMPTY_FILTER_FORM;
+  const title = editingId
+    ? 'Edytuj filtr'
+    : isCopy
+      ? 'Nowy filtr (kopia)'
+      : 'Nowy filtr';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{isCopy ? 'Nowy filtr (kopia)' : 'Nowy filtr'}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {isCopy
               ? 'Kryteria skopiowane z istniejącego filtra — zmień, co trzeba.'
@@ -369,9 +411,9 @@ function AddFilterDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Anuluj
             </Button>
-            <Button type="submit" disabled={addFilter.isPending}>
-              {addFilter.isPending ? <Loader2Icon className="animate-spin" /> : null}
-              Dodaj filtr
+            <Button type="submit" disabled={pending}>
+              {pending ? <Loader2Icon className="animate-spin" /> : null}
+              {editingId ? 'Zapisz zmiany' : 'Dodaj filtr'}
             </Button>
           </DialogFooter>
         </form>

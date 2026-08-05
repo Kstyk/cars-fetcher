@@ -17,8 +17,11 @@ const csvArray = <T extends readonly [string, ...string[]]>(values: T) =>
     .optional();
 
 export const listingSortValues = [
+  /** By the marketplace's publication date. */
   'newest',
   'oldest',
+  /** By when our fetcher first saw the advert. */
+  'added_newest',
   'price_asc',
   'price_desc',
   'mileage_asc',
@@ -51,6 +54,17 @@ export const listingQuerySchema = paginationSchema.extend({
     .optional(),
   powerFrom: z.coerce.number().int().optional(),
   powerTo: z.coerce.number().int().optional(),
+
+  /* ------------------------------- location ------------------------------ */
+  region: z
+    .union([z.string(), z.array(z.string())])
+    .transform((v) => (Array.isArray(v) ? v : v.split(',')))
+    .optional(),
+  city: z.string().trim().max(120).optional(),
+  /** Radius search anchor - either an explicit point or the named city. */
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lon: z.coerce.number().min(-180).max(180).optional(),
+  radiusKm: z.coerce.number().min(1).max(1000).optional(),
   onlyFavorites: z.coerce.boolean().optional(),
   onlyNew: z.coerce.boolean().optional(),
   includeInactive: z.coerce.boolean().default(false),

@@ -12,9 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  EMPTY_LOCATION,
+  LocationFilter,
+  locationToParams,
+  type LocationValue,
+} from '@/components/location-filter';
 import { Combobox, MultiCombobox } from '@/components/ui/combobox';
 import { BODY_LABELS, FUEL_LABELS, GEARBOX_LABELS } from '@/lib/format';
 import {
+  useCities,
   useFilterGroups,
   useListings,
   useProviders,
@@ -22,7 +29,10 @@ import {
 } from '@/lib/queries';
 
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'Najnowsze' },
+  // "Newest" follows the marketplace's publication date, not our fetch time.
+  { value: 'newest', label: 'Najnowsze ogłoszenia' },
+  { value: 'oldest', label: 'Najstarsze ogłoszenia' },
+  { value: 'added_newest', label: 'Ostatnio pobrane' },
   { value: 'price_asc', label: 'Cena rosnąco' },
   { value: 'price_desc', label: 'Cena malejąco' },
   { value: 'mileage_asc', label: 'Przebieg rosnąco' },
@@ -71,10 +81,14 @@ const EMPTY_FILTERS: Filters = {
 
 export function ListingsPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
   const [page, setPage] = useState(1);
   const groups = useFilterGroups();
   const taxonomy = useTaxonomy();
   const providers = useProviders();
+  const cities = useCities();
+
+  const cityNames = [...new Set((cities.data ?? []).map((entry) => entry.city))];
 
   // Listings store display names ("Volvo", "Niemcy"), not provider slugs, so
   // the option value has to be the label.
@@ -113,6 +127,7 @@ export function ListingsPage() {
     ...(filters.countryOrigin.length ? { countryOrigin: filters.countryOrigin } : {}),
     ...(filters.color.length ? { color: filters.color } : {}),
     ...(filters.bodyType !== ALL ? { bodyType: filters.bodyType } : {}),
+    ...locationToParams(location),
   };
 
   const listings = useListings(params);
@@ -123,7 +138,8 @@ export function ListingsPage() {
   }
 
   const hasActiveFilters =
-    JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
+    JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS) ||
+    JSON.stringify(location) !== JSON.stringify(EMPTY_LOCATION);
 
   return (
     <div className="space-y-6">
@@ -271,6 +287,15 @@ export function ListingsPage() {
             doors and drive - those live in the filter form, where they are
             applied by the provider itself.
           */}
+          <LocationFilter
+            value={location}
+            cities={cityNames}
+            onChange={(next) => {
+              setLocation(next);
+              setPage(1);
+            }}
+          />
+
           <div className="w-44 space-y-1.5">
             <Label>Kraj pochodzenia</Label>
             <MultiCombobox
@@ -346,6 +371,7 @@ export function ListingsPage() {
               size="sm"
               onClick={() => {
                 setFilters(EMPTY_FILTERS);
+                setLocation(EMPTY_LOCATION);
                 setPage(1);
               }}
             >

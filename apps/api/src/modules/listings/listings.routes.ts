@@ -32,6 +32,13 @@ listingsRouter.get(
 );
 
 listingsRouter.get(
+  '/cities',
+  asyncHandler(async (req, res) => {
+    res.json(await service.listCities(currentUserId(req)));
+  }),
+);
+
+listingsRouter.get(
   '/stats',
   asyncHandler(async (req, res) => {
     res.json(await service.getStats(currentUserId(req)));

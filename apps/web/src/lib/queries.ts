@@ -128,6 +128,18 @@ export function useAddFilter(groupId: string) {
   });
 }
 
+export function useUpdateFilter(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ filterId, input }: { filterId: string; input: unknown }) =>
+      api.put(`/api/filter-groups/${groupId}/filters/${filterId}`, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.group(groupId) });
+    },
+  });
+}
+
 export function useDeleteFilter(groupId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -173,6 +185,16 @@ export function useListingStats() {
   return useQuery({
     queryKey: queryKeys.stats,
     queryFn: () => api.get<ListingStats>('/api/listings/stats'),
+  });
+}
+
+/** Cities that actually appear in the user's listings, for the location filter. */
+export function useCities() {
+  return useQuery({
+    queryKey: ['listings', 'cities'],
+    queryFn: () =>
+      api.get<Array<{ city: string; region: string | null }>>('/api/listings/cities'),
+    staleTime: 5 * 60_000,
   });
 }
 

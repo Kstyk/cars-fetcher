@@ -21,6 +21,7 @@ import {
   PROVIDER_COLORS,
   PROVIDER_LABELS,
   SELLER_LABELS,
+  formatDateTime,
   formatMileage,
   formatPrice,
   formatRelative,
@@ -38,8 +39,10 @@ export function ListingCard({ listing }: { listing: Listing }) {
   const toggleFavorite = useToggleFavorite();
   const [imageFailed, setImageFailed] = useState(false);
 
-  const isFresh =
-    Date.now() - new Date(listing.firstSeenAt).getTime() < 24 * 3_600_000;
+  // Dates shown to the user are the marketplace's, not our fetch time.
+  // `firstSeenAt` is the fallback for providers that do not publish one.
+  const publishedAt = listing.publishedAt ?? listing.firstSeenAt;
+  const isFresh = Date.now() - new Date(publishedAt).getTime() < 24 * 3_600_000;
 
   return (
     <Card className="group relative gap-0 overflow-hidden pt-0 transition-shadow hover:shadow-md">
@@ -177,9 +180,13 @@ export function ListingCard({ listing }: { listing: Listing }) {
       </dl>
 
       <div className="mt-5 flex items-center justify-between gap-2 border-t px-5 py-3">
-        <span className="text-muted-foreground truncate text-xs">
+        <span
+          className="text-muted-foreground truncate text-xs"
+          // Exact dates on hover: when the advert went up, and when we saw it.
+          title={`Wystawiono: ${formatDateTime(publishedAt)}\nPobrano: ${formatDateTime(listing.firstSeenAt)}`}
+        >
           {listing.sellerName ?? label(SELLER_LABELS, listing.sellerType)} ·{' '}
-          {formatRelative(listing.firstSeenAt)}
+          {formatRelative(publishedAt)}
         </span>
         <Button asChild size="sm" variant="outline" className="shrink-0">
           <a href={listing.url} target="_blank" rel="noopener noreferrer">
