@@ -56,14 +56,21 @@ interface AdvertSearch {
 /** Otomoto serves 32 adverts per page and ignores attempts to raise it. */
 const PAGE_SIZE = 32;
 
-/** Params whose raw `value` feeds the mapper's enum dictionaries. */
-const ENUM_PARAM_KEYS = new Set([
-  'fuel_type',
-  'gearbox',
-  'body_type',
-  'transmission',
-  'new_used',
-  'damaged',
+/**
+ * Params read as display text rather than raw value: "Volvo" over "volvo",
+ * "XC 60" over "xc-60", "Korea" over "kr".
+ *
+ * Everything else keeps the machine value. Enum dictionaries need it, and so do
+ * numbers - `engine_capacity` displays as "1 995 cm3", whose unit carries a
+ * digit that would be parsed into the number (19953 -> "20.0 l").
+ */
+const DISPLAY_VALUE_PARAM_KEYS = new Set([
+  'make',
+  'model',
+  'generation',
+  'version',
+  'color',
+  'country_origin',
 ]);
 const BASE_URL = 'https://www.otomoto.pl';
 const CATEGORY_PATH = '/osobowe';
@@ -266,12 +273,9 @@ export class OtomotoScraperSource implements ListingSource {
     const params: Record<string, string> = {};
     for (const parameter of node.parameters ?? []) {
       if (!parameter.key) continue;
-      // Enum-like params must keep their machine value ("petrol", "automatic")
-      // because the mapper dictionaries key off it. Everything else reads
-      // better as the display text: "Volvo" over "volvo", "Korea" over "kr".
-      params[parameter.key] = ENUM_PARAM_KEYS.has(parameter.key)
-        ? parameter.value
-        : (parameter.displayValue ?? parameter.value);
+      params[parameter.key] = DISPLAY_VALUE_PARAM_KEYS.has(parameter.key)
+        ? (parameter.displayValue ?? parameter.value)
+        : parameter.value;
     }
 
     const amount = node.price?.amount;

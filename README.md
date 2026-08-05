@@ -253,8 +253,41 @@ działa. Debugując z terminala, nie sugeruj się `curl` — użyj Node'a.
 | ------------- | ------------------- | -------------------------------- |
 | Otomoto       | działa              | publiczne strony ofert / API partnerskie |
 | OLX           | działa              | `/api/v1/offers/` (dozwolone w robots.txt) |
-| autoplac.pl   | **niezaimplementowane** | —                            |
+| autoplac.pl   | działa              | Angular TransferState na stronach `/oferty/` |
 | FindCar       | **niezaimplementowane** | —                            |
+
+### autoplac.pl
+
+Angular z SSR — cała odpowiedź API ląduje w stronie jako
+`<script type="application/json">` (TransferState). Parsowanie tego daje
+strukturalne oferty bez sięgania do ich hosta API (który i tak wymaga
+uwierzytelnienia: GET zwraca `offerCount: 0`, POST — 403).
+
+`robots.txt` mocno ogranicza sposób filtrowania:
+
+```
+Disallow: /*offset
+Disallow: /*?*fullTextQuery=
+Disallow: /*?*brandModelIds=
+Disallow: /?sortOrder=   /?orderBy=
+```
+
+Czyli standardowe parametry wyszukiwania są zabronione. Ale marka i model
+działają jako **segmenty ścieżki**, a paginacja przez `?p=N` — żadne z nich nie
+jest na liście `Disallow`:
+
+```
+/oferty/samochody-osobowe              → 185 368 ofert
+/oferty/samochody-osobowe/volvo        →   6 404
+/oferty/samochody-osobowe/volvo/xc-60  →   1 776
+```
+
+Reszta kryteriów (cena, rocznik, przebieg, paliwo, nadwozie) jest filtrowana po
+naszej stronie. 24 oferty na stronę.
+
+Uwagi o danych: moc podawana w kW (przeliczam na KM), `insertTime` to epoch w
+milisekundach, a payload listy nie zawiera flagi prywatny/dealer — dlatego
+`sellerType` to `unknown`.
 
 `GET /api/providers` zwraca ten stan; UI wyszarza serwisy bez adaptera i
 oznacza je jako „wkrótce". Filtr przypisany do niezaimplementowanego serwisu

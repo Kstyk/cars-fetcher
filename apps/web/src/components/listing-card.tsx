@@ -18,6 +18,8 @@ import { Card } from '@/components/ui/card';
 import {
   FUEL_LABELS,
   GEARBOX_LABELS,
+  PROVIDER_COLORS,
+  PROVIDER_LABELS,
   SELLER_LABELS,
   formatMileage,
   formatPrice,
@@ -63,6 +65,13 @@ export function ListingCard({ listing }: { listing: Listing }) {
         )}
 
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5">
+          {/* Which marketplace this came from - the same car can appear on several. */}
+          <Badge
+            className="border-transparent text-white"
+            style={{ backgroundColor: PROVIDER_COLORS[listing.provider] ?? '#475569' }}
+          >
+            {label(PROVIDER_LABELS, listing.provider)}
+          </Badge>
           {isFresh ? <Badge variant="success">Nowe</Badge> : null}
           {!listing.isActive ? (
             <Badge variant="secondary">Nieaktywne</Badge>

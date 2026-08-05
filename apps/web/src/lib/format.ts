@@ -106,6 +106,25 @@ export const BODY_LABELS: Record<string, string> = {
   other: 'Inne',
 };
 
+export const PROVIDER_LABELS: Record<string, string> = {
+  otomoto: 'Otomoto',
+  olx: 'OLX',
+  autoplac: 'autoplac.pl',
+  findcar: 'FindCar',
+  mobile_de: 'mobile.de',
+  autoscout24: 'AutoScout24',
+};
+
+/** Brand colours, so the source is recognisable at a glance on a card. */
+export const PROVIDER_COLORS: Record<string, string> = {
+  otomoto: '#0a5aff',
+  olx: '#23e5db',
+  autoplac: '#ff6b00',
+  findcar: '#7c3aed',
+  mobile_de: '#f59e0b',
+  autoscout24: '#eab308',
+};
+
 export const SELLER_LABELS: Record<string, string> = {
   private: 'Osoba prywatna',
   dealer: 'Dealer',

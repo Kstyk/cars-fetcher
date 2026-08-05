@@ -1,5 +1,6 @@
 import { env, otomotoConfigured } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import { autoplacSource } from './autoplac/autoplac.source.js';
 import { fixtureSource } from './fixture/fixture.source.js';
 import { olxSource } from './olx/olx.source.js';
 import { otomotoScraperSource } from './otomoto/otomoto-scraper.source.js';
@@ -18,7 +19,7 @@ const sources = new Map<ProviderName, ListingSource>();
 
 sources.set('otomoto', resolveOtomotoSource());
 sources.set('olx', olxSource);
-sources.set('autoplac', new UnimplementedSource('autoplac', 'autoplac.pl'));
+sources.set('autoplac', autoplacSource);
 sources.set('findcar', new UnimplementedSource('findcar', 'FindCar'));
 
 /** Human-readable names for the provider picker in the UI. */
