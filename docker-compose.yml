@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: cars-fetcher-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cars}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cars}
+      POSTGRES_DB: ${POSTGRES_DB:-cars_fetcher}
+      # Deterministic collation so ORDER BY on text behaves the same everywhere.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pl-PL --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cars} -d ${POSTGRES_DB:-cars_fetcher}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:5
+    container_name: cars-fetcher-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+
+volumes:
+  postgres_data:

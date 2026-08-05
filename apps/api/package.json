@@ -1,0 +1,45 @@
+{
+  "name": "@cars-fetcher/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file=../../.env dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts",
+    "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
+    "db:studio": "drizzle-kit studio",
+    "scrape:test": "tsx --env-file=../../.env src/scripts/test-scraper.ts",
+    "taxonomy:build": "tsx --env-file=../../.env src/scripts/build-taxonomy.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "drizzle-orm": "^0.44.2",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.2.0",
+    "pg": "^8.16.3",
+    "pino": "^9.7.0",
+    "pino-http": "^10.5.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.15.4",
+    "drizzle-kit": "^0.31.4",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
