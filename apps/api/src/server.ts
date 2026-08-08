@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { pool } from './db/client.js';
 import { startScheduler, stopScheduler } from './jobs/scheduler.js';
+import { closeBrowser } from './providers/scraping/browser-fetch.js';
 
 const app = createApp();
 
@@ -16,6 +17,7 @@ async function shutdown(signal: string): Promise<void> {
   stopScheduler();
 
   server.close(async () => {
+    await closeBrowser();
     await pool.end();
     process.exit(0);
   });

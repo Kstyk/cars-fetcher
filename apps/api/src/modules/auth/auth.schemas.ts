@@ -34,5 +34,9 @@ export const changePasswordSchema = z.object({
   newPassword: password,
 });
 
+export const verifyEmailSchema = z.object({
+  token: z.string().min(10, 'Nieprawidłowy token'),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

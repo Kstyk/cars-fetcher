@@ -45,17 +45,30 @@ export async function listGroups(userId: string): Promise<GroupWithStats[]> {
       .select({
         groupId: listingMatches.groupId,
         total: count(),
-        // "New" = surfaced in the last 24 h, which is what the UI badge shows.
-        fresh: sql<number>`count(*) filter (where ${listingMatches.firstMatchedAt} > now() - interval '24 hours')`.mapWith(
-          Number,
-        ),
+        /*
+         * "New" = discovered since the previous fetch, so each completed run
+         * clears the badge.
+         *
+         * It used to count everything matched within 24 h, which for a group
+         * created today meant every single row - "+535 new" on 535 offers.
+         * Groups that never ran twice have no marker yet; there the publication
+         * date is the closest honest answer.
+         */
+        fresh: sql<number>`count(*) filter (
+          where ${listingMatches.firstMatchedAt} > coalesce(
+            ${filterGroups.previousFetchedAt},
+            now() - interval '24 hours'
+          )
+        )`.mapWith(Number),
       })
       .from(listingMatches)
       .innerJoin(listings, eq(listings.id, listingMatches.listingId))
+      // Needed for `previous_fetched_at`, the cut-off the "new" count uses.
+      .innerJoin(filterGroups, eq(filterGroups.id, listingMatches.groupId))
       .where(
         and(inArray(listingMatches.groupId, groupIds), eq(listings.isActive, true)),
       )
-      .groupBy(listingMatches.groupId),
+      .groupBy(listingMatches.groupId, filterGroups.previousFetchedAt),
 
     db
       .selectDistinctOn([fetchRuns.groupId], {
@@ -240,6 +253,12 @@ export async function listRuns(userId: string, groupId: string, limit = 20) {
     .select({
       id: fetchRuns.id,
       filterId: fetchRuns.filterId,
+      // Which search this run covered - a group has many filters and the table
+      // is unreadable without it.
+      filterName: filters.name,
+      filterMake: filters.make,
+      filterModel: filters.model,
+      filterProvider: filters.provider,
       status: fetchRuns.status,
       trigger: fetchRuns.trigger,
       pagesFetched: fetchRuns.pagesFetched,
@@ -252,6 +271,8 @@ export async function listRuns(userId: string, groupId: string, limit = 20) {
       durationMs: fetchRuns.durationMs,
     })
     .from(fetchRuns)
+    // Left join: a filter deleted after its run still leaves the history row.
+    .leftJoin(filters, eq(filters.id, fetchRuns.filterId))
     .where(eq(fetchRuns.groupId, groupId))
     .orderBy(desc(fetchRuns.startedAt))
     .limit(limit);

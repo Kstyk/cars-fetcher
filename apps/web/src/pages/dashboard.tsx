@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import {
+  ArchiveIcon,
   CarFrontIcon,
-  HeartIcon,
   ListFilterIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -62,9 +62,9 @@ export function DashboardPage() {
           value={stats.data ? formatPrice(stats.data.avgPrice) : undefined}
         />
         <StatCard
-          icon={<HeartIcon />}
-          label="Ulubione"
-          value={stats.data ? String(stats.data.favorites) : undefined}
+          icon={<ArchiveIcon />}
+          label="Sprzedane"
+          value={stats.data ? String(stats.data.archived) : undefined}
         />
       </div>
 
@@ -162,6 +162,70 @@ export function DashboardPage() {
         )}
       </section>
 
+      {stats.data && stats.data.soldByModel.length > 0 ? (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Sprzedaż wg modelu</h2>
+            <p className="text-muted-foreground text-sm">
+              Ogłoszenie, które zniknęło z serwisu, liczymy jako sprzedane.
+              Modele z jedną ofertą są pominięte.
+            </p>
+          </div>
+
+          <Card>
+            <CardContent className="overflow-x-auto py-4">
+              <table className="w-full text-sm">
+                <thead className="text-muted-foreground text-left text-xs">
+                  <tr className="border-b">
+                    <th className="py-2 pr-4 font-medium">Model</th>
+                    <th className="py-2 pr-4 text-right font-medium">Ogłoszeń</th>
+                    <th className="py-2 pr-4 text-right font-medium">Sprzedanych</th>
+                    <th className="py-2 pr-4 text-right font-medium">Udział</th>
+                    <th className="py-2 pr-4 text-right font-medium">Śr. cena</th>
+                    <th className="py-2 text-right font-medium">Mediana dni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.data.soldByModel.map((row) => {
+                    const share = row.total > 0 ? (row.sold / row.total) * 100 : 0;
+                    return (
+                      <tr
+                        key={`${row.make}-${row.model}`}
+                        className="border-b last:border-0"
+                      >
+                        <td className="py-2 pr-4">
+                          {[row.make, row.model].filter(Boolean).join(' ')}
+                        </td>
+                        <td className="data-figure py-2 pr-4 text-right">{row.total}</td>
+                        <td className="data-figure py-2 pr-4 text-right">{row.sold}</td>
+                        <td className="py-2 pr-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* A bar reads faster than a bare percentage. */}
+                            <span className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
+                              <span
+                                className="bg-primary block h-full rounded-full"
+                                style={{ width: `${Math.min(100, share)}%` }}
+                              />
+                            </span>
+                            <span className="data-figure w-10">{share.toFixed(0)}%</span>
+                          </div>
+                        </td>
+                        <td className="data-figure py-2 pr-4 text-right">
+                          {row.avgSoldPrice ? formatPrice(row.avgSoldPrice) : '—'}
+                        </td>
+                        <td className="data-figure py-2 text-right">
+                          {row.medianDaysToSell ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
+
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Najnowsze oferty</h2>
@@ -214,7 +278,7 @@ function StatCard({
           {value === undefined ? (
             <Skeleton className="mt-1 h-6 w-20" />
           ) : (
-            <p className="tabular truncate text-xl font-semibold">{value}</p>
+            <p className="data-figure truncate text-xl font-semibold">{value}</p>
           )}
         </div>
       </CardContent>

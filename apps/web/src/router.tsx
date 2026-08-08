@@ -18,6 +18,7 @@ import { ListingsPage } from '@/pages/listings';
 import { LoginPage, RegisterPage } from '@/pages/login';
 import { NotificationsPage } from '@/pages/notifications';
 import { ProfilePage } from '@/pages/profile';
+import { VerifyEmailPage } from '@/pages/verify-email';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -66,6 +67,19 @@ const registerRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: '/register',
   component: RegisterPage,
+});
+
+/**
+ * Off the root, not the auth/protected layouts: a verification link must work
+ * regardless of whether the browser currently holds a session.
+ */
+const verifyEmailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/verify-email',
+  validateSearch: (search: Record<string, unknown>): { token?: string } => ({
+    token: typeof search.token === 'string' ? search.token : undefined,
+  }),
+  component: VerifyEmailPage,
 });
 
 /**
@@ -122,9 +136,85 @@ const groupDetailRoute = createRoute({
   component: GroupDetailPage,
 });
 
+/**
+ * Listing filters live in the URL so a search can be bookmarked, shared and
+ * survives a refresh. Only non-empty values are serialised, which keeps the
+ * address bar readable.
+ */
+export interface ListingsSearch {
+  q?: string;
+  groupId?: string;
+  provider?: string[];
+  make?: string;
+  model?: string;
+  fuelType?: string;
+  gearbox?: string;
+  bodyType?: string;
+  color?: string[];
+  countryOrigin?: string[];
+  priceFrom?: number;
+  priceTo?: number;
+  yearFrom?: number;
+  mileageTo?: number;
+  powerFrom?: number;
+  region?: string[];
+  city?: string;
+  radiusKm?: number;
+  lat?: number;
+  lon?: number;
+  sort?: string;
+  page?: number;
+  /** 'no' (default) hides sold cars, 'yes' shows only them, 'all' both. */
+  archived?: string;
+}
+
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value !== '' ? value : undefined;
+
+const asNumber = (value: unknown): number | undefined => {
+  const parsed = Number(value);
+  return value !== undefined && value !== '' && Number.isFinite(parsed)
+    ? parsed
+    : undefined;
+};
+
+const asStringArray = (value: unknown): string[] | undefined => {
+  if (Array.isArray(value)) {
+    const list = value.filter((entry): entry is string => typeof entry === 'string');
+    return list.length ? list : undefined;
+  }
+  if (typeof value === 'string' && value !== '') return value.split(',');
+  return undefined;
+};
+
 const listingsRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: '/listings',
+  validateSearch: (search: Record<string, unknown>): ListingsSearch => ({
+    q: asString(search.q),
+    groupId: asString(search.groupId),
+    provider: asStringArray(search.provider),
+    make: asString(search.make),
+    model: asString(search.model),
+    fuelType: asString(search.fuelType),
+    gearbox: asString(search.gearbox),
+    bodyType: asString(search.bodyType),
+    color: asStringArray(search.color),
+    countryOrigin: asStringArray(search.countryOrigin),
+    priceFrom: asNumber(search.priceFrom),
+    priceTo: asNumber(search.priceTo),
+    yearFrom: asNumber(search.yearFrom),
+    mileageTo: asNumber(search.mileageTo),
+    powerFrom: asNumber(search.powerFrom),
+    region: asStringArray(search.region),
+    city: asString(search.city),
+    radiusKm: asNumber(search.radiusKm),
+    lat: asNumber(search.lat),
+    lon: asNumber(search.lon),
+    sort: asString(search.sort),
+    archived: asString(search.archived),
+    page: asNumber(search.page),
+  }),
   component: ListingsPage,
 });
 
@@ -147,6 +237,7 @@ const profileRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  verifyEmailRoute,
   authLayoutRoute.addChildren([loginRoute, registerRoute]),
   protectedLayoutRoute.addChildren([
     dashboardRoute,

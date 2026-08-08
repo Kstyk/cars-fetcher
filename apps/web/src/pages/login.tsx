@@ -1,6 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { CarFrontIcon, Loader2Icon } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { GoogleLoginButton } from '@/components/auth/google-login-button';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -14,12 +15,18 @@ import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
+const OAUTH_ERROR_MESSAGE = 'Logowanie przez Google nie powiodło się. Spróbuj ponownie.';
+
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('demo@cars-fetcher.local');
   const [password, setPassword] = useState('Demo1234');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('error')
+      ? OAUTH_ERROR_MESSAGE
+      : null,
+  );
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
@@ -78,6 +85,8 @@ export function LoginPage() {
           {pending ? <Loader2Icon className="animate-spin" /> : null}
           Zaloguj się
         </Button>
+
+        <GoogleLoginButton />
 
         <p className="text-muted-foreground text-center text-sm">
           Nie masz konta?{' '}
@@ -184,6 +193,8 @@ export function RegisterPage() {
           {pending ? <Loader2Icon className="animate-spin" /> : null}
           Utwórz konto
         </Button>
+
+        <GoogleLoginButton />
 
         <p className="text-muted-foreground text-center text-sm">
           Masz już konto?{' '}

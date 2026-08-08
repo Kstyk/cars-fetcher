@@ -22,15 +22,16 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 }
 
 /**
- * Refresh tokens are opaque random strings - only their SHA-256 digest reaches
- * the database, so a dump of `refresh_tokens` cannot be replayed.
+ * Random string plus its SHA-256 digest - the shape every bearer token in
+ * this app uses (refresh tokens, e-mail verification links). Only the digest
+ * reaches the database, so a dump of the table cannot be replayed.
  */
-export function generateRefreshToken(): { token: string; tokenHash: string } {
+export function generateOpaqueToken(): { token: string; tokenHash: string } {
   const token = crypto.randomBytes(48).toString('base64url');
-  return { token, tokenHash: hashRefreshToken(token) };
+  return { token, tokenHash: hashOpaqueToken(token) };
 }
 
-export function hashRefreshToken(token: string): string {
+export function hashOpaqueToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 

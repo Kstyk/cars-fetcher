@@ -6,7 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "start": "node --env-file=../../.env dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
@@ -19,10 +19,13 @@
     "olx:test": "tsx --env-file=../../.env src/scripts/test-olx.ts",
     "autoplac:test": "tsx --env-file=../../.env src/scripts/test-autoplac.ts",
     "geo:backfill": "tsx --env-file=../../.env src/scripts/backfill-geo.ts",
-    "findcar:test": "tsx --env-file=../../.env src/scripts/test-findcar.ts"
+    "findcar:test": "tsx --env-file=../../.env src/scripts/test-findcar.ts",
+    "sprzedajemy:test": "tsx --env-file=../../.env src/scripts/test-sprzedajemy.ts",
+    "push:generate-keys": "tsx src/scripts/generate-vapid-keys.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.44.2",
@@ -30,9 +33,12 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.0",
+    "nodemailer": "^9.0.4",
     "pg": "^8.16.3",
     "pino": "^9.7.0",
     "pino-http": "^10.5.0",
+    "playwright": "^1.55.0",
+    "web-push": "^3.6.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -41,7 +47,9 @@
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.15.4",
+    "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.4",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.20.3",

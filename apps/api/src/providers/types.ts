@@ -5,6 +5,7 @@ export type ProviderName =
   | 'olx'
   | 'autoplac'
   | 'findcar'
+  | 'sprzedajemy'
   | 'mobile_de'
   | 'autoscout24';
 

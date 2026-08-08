@@ -56,11 +56,22 @@ export interface ListingView {
   firstSeenAt: Date;
   lastSeenAt: Date;
   isActive: boolean;
+  isArchived: boolean;
+  archivedAt: Date | null;
   isFavorite: boolean;
   /** Which of the caller's groups surfaced this listing, for the card badges. */
   groups: Array<{ id: string; name: string; color: string | null }>;
   priceChangePct: number | null;
+  /**
+   * Negative means below the market median for similar cars (good price),
+   * positive means above it. `null` when the listing itself lacks
+   * make/model/year/mileage, or too few comparables exist to trust a median.
+   */
+  priceVsMarketPct: number | null;
 }
+
+/** Below this many comparables, a median is noise, not a signal. */
+const MIN_MARKET_SAMPLE_SIZE = 5;
 
 /**
  * Reads listings out of our own database - the fetcher is what talks to
@@ -104,7 +115,14 @@ export async function searchListings(
     ),
   ];
 
-  if (!query.includeInactive) conditions.push(eq(listings.isActive, true));
+  // Archived listings are excluded by default - they are no longer for sale.
+  if (query.archived === 'no') conditions.push(eq(listings.isArchived, false));
+  if (query.archived === 'yes') conditions.push(eq(listings.isArchived, true));
+
+  // Only constrain activity when archived rows are not the point of the query.
+  if (!query.includeInactive && query.archived === 'no') {
+    conditions.push(eq(listings.isActive, true));
+  }
   if (query.provider?.length) {
     conditions.push(inArray(listings.provider, query.provider));
   }
@@ -221,6 +239,8 @@ export async function searchListings(
         firstSeenAt: listings.firstSeenAt,
         lastSeenAt: listings.lastSeenAt,
         isActive: listings.isActive,
+        isArchived: listings.isArchived,
+        archivedAt: listings.archivedAt,
         // Table names are spelled out: inside a select field drizzle emits
         // unqualified column names, which would collide in these subqueries.
         isFavorite: sql<boolean>`exists (
@@ -240,6 +260,34 @@ export async function searchListings(
           where h.listing_id = listings.id
           order by h.recorded_at desc
           limit 1
+        )`.mapWith((v) => (v === null ? null : Number(v))),
+        // Same make/model, published within a year, mileage within 30% -
+        // "similar enough" without shrinking the cohort to nothing. One
+        // correlated subquery does both the median and the sample size so
+        // the cohort is only scanned once.
+        priceVsMarketPct: sql<number | null>`(
+          select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
+            then round((
+              (${listings.price} - (stats->>'median')::numeric)
+              / (stats->>'median')::numeric * 100
+            )::numeric, 1)
+            else null
+          end
+          from (
+            select jsonb_build_object(
+              'median', percentile_cont(0.5) within group (order by l2.price),
+              'count', count(*)
+            ) as stats
+            from listings l2
+            where l2.make = listings.make
+              and l2.model = listings.model
+              and l2.year between listings.year - 1 and listings.year + 1
+              and l2.mileage_km between listings.mileage_km * 0.7 and listings.mileage_km * 1.3
+              and l2.price is not null
+              and l2.is_active = true
+              and l2.is_archived = false
+              and l2.id != listings.id
+          ) cohort
         )`.mapWith((v) => (v === null ? null : Number(v))),
       })
       .from(listings)
@@ -493,12 +541,53 @@ export async function getStats(userId: string) {
       .limit(10),
   ]);
 
+  /**
+   * Sold-vs-listed per model. "Sold" means the advert disappeared from the
+   * marketplace, which is the only signal these sites give us. Models with a
+   * single listing are dropped - a 100% ratio off one car says nothing.
+   */
+  const soldByModel = await db
+    .select({
+      make: listings.make,
+      model: listings.model,
+      total: countDistinct(listings.id),
+      sold: sql<number>`count(distinct ${listings.id}) filter (where ${listings.isArchived})`.mapWith(
+        Number,
+      ),
+      avgSoldPrice: sql<number | null>`avg(${listings.price}) filter (where ${listings.isArchived})`.mapWith(
+        (v) => (v === null ? null : Math.round(Number(v))),
+      ),
+      /** Median days between first sighting and disappearance. */
+      medianDaysToSell: sql<number | null>`percentile_cont(0.5) within group (
+        order by extract(epoch from (${listings.archivedAt} - ${listings.firstSeenAt})) / 86400
+      ) filter (where ${listings.isArchived} and ${listings.archivedAt} is not null)`.mapWith(
+        (v) => (v === null ? null : Math.round(Number(v) * 10) / 10),
+      ),
+    })
+    .from(listings)
+    .where(and(scoped, sql`${listings.make} is not null`))
+    .groupBy(listings.make, listings.model)
+    .having(sql`count(distinct ${listings.id}) > 1`)
+    .orderBy(desc(sql`count(distinct ${listings.id}) filter (where ${listings.isArchived})`))
+    .limit(25);
+
+  const [archivedTotals] = await db
+    .select({
+      archived: sql<number>`count(distinct ${listings.id}) filter (where ${listings.isArchived})`.mapWith(
+        Number,
+      ),
+    })
+    .from(listings)
+    .where(scoped);
+
   return {
     total: totals?.total ?? 0,
     active: totals?.active ?? 0,
     fresh24h: totals?.fresh24h ?? 0,
     avgPrice: totals?.avgPrice ?? null,
     favorites: favoriteCount?.value ?? 0,
+    archived: archivedTotals?.archived ?? 0,
     byMake: byMake.filter((m) => m.make !== null),
+    soldByModel,
   };
 }

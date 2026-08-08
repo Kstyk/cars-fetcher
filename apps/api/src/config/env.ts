@@ -51,6 +51,32 @@ const envSchema = z.object({
    */
   SCRAPER_MIN_PRICE_PLN: z.coerce.number().int().min(0).default(2000),
 
+  /**
+   * Public base URL of the web app, used to build links inside e-mails and
+   * push notifications (the API itself never renders a page).
+   */
+  APP_URL: z.string().url().default('http://localhost:5180'),
+
+  // --- Web Push (VAPID) ---------------------------------------------------
+  // Generate with: npm run push:generate-keys --workspace @cars-fetcher/api
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:admin@example.com'),
+
+  // --- Google OAuth2 login --------------------------------------------------
+  // From https://console.cloud.google.com/apis/credentials - authorised
+  // redirect URI must be exactly `${APP_URL}/api/auth/google/callback`.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+
+  // --- E-mail (SMTP) --------------------------------------------------------
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: booleanish.default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('Cars Fetcher <no-reply@cars-fetcher.local>'),
+
   SCHEDULER_ENABLED: booleanish.default('true'),
   SCHEDULER_CRON: z.string().default('*/30 * * * *'),
   FETCH_MAX_PAGES: z.coerce.number().int().positive().max(50).default(5),
@@ -84,3 +110,14 @@ export const otomotoConfigured =
       env.OTOMOTO_USERNAME &&
       env.OTOMOTO_PASSWORD,
   );
+
+/** Both VAPID keys must be present together, or web push cannot sign anything. */
+export const pushConfigured = Boolean(
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY,
+);
+
+export const emailConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
+
+export const googleAuthConfigured = Boolean(
+  env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET,
+);

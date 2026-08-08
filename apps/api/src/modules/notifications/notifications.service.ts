@@ -1,6 +1,8 @@
 import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import {
+  filterGroups,
+  listings,
   notificationPreferences,
   notifications,
   pushSubscriptions,
@@ -8,6 +10,7 @@ import {
 } from '../../db/schema.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { paginate, type Pagination } from '../../lib/pagination.js';
+import { dispatchNotification } from './dispatch.service.js';
 
 export type NotificationType =
   | 'new_listing'
@@ -67,28 +70,39 @@ export async function updatePreferences(
 
 /**
  * Persists a notification, honouring the user's per-type toggles and quiet
- * hours. Delivery to e-mail/push is a separate concern; this writes the in-app
- * record and leaves `sentAt` for the dispatcher.
+ * hours, then fans it out to e-mail/push per the user's channel settings.
+ *
+ * The in-app row is written even during quiet hours (so it's there once the
+ * user opens the bell); only the outbound e-mail/push dispatch is skipped
+ * during that window; a digest is delivered instead once one is implemented.
  */
 export async function notify(input: CreateNotificationInput): Promise<void> {
   const prefs = await getPreferences(input.userId);
   if (!isTypeEnabled(prefs, input.type)) return;
   if (!prefs.inAppEnabled) return;
-  if (isQuietHours(prefs)) {
-    // Suppressed rather than dropped: it lands as part of the next digest.
-    if (prefs.digestFrequency === 'off') return;
-  }
 
-  await db.insert(notifications).values({
-    userId: input.userId,
-    type: input.type,
-    channel: 'in_app',
-    title: input.title.slice(0, 200),
-    body: input.body ?? null,
-    listingId: input.listingId ?? null,
-    groupId: input.groupId ?? null,
-    payload: input.payload ?? null,
-  });
+  const quiet = isQuietHours(prefs);
+  if (quiet && prefs.digestFrequency === 'off') return;
+
+  const [row] = await db
+    .insert(notifications)
+    .values({
+      userId: input.userId,
+      type: input.type,
+      channel: 'in_app',
+      title: input.title.slice(0, 200),
+      body: input.body ?? null,
+      listingId: input.listingId ?? null,
+      groupId: input.groupId ?? null,
+      payload: input.payload ?? null,
+    })
+    .returning();
+
+  if (!row || quiet) return;
+
+  // Awaited so a fetch run only finishes after delivery is attempted, but
+  // failures are caught inside dispatchNotification and never thrown here.
+  await dispatchNotification(row, prefs);
 }
 
 export async function notifyMany(
@@ -108,8 +122,26 @@ export async function listNotifications(
 
   const [rows, [totals]] = await Promise.all([
     db
-      .select()
+      .select({
+        id: notifications.id,
+        type: notifications.type,
+        channel: notifications.channel,
+        title: notifications.title,
+        body: notifications.body,
+        listingId: notifications.listingId,
+        groupId: notifications.groupId,
+        payload: notifications.payload,
+        readAt: notifications.readAt,
+        createdAt: notifications.createdAt,
+        // Carried along so the bell can link straight to the marketplace
+        // without a second round-trip per notification.
+        listingUrl: listings.url,
+        listingProvider: listings.provider,
+        groupName: filterGroups.name,
+      })
       .from(notifications)
+      .leftJoin(listings, eq(listings.id, notifications.listingId))
+      .leftJoin(filterGroups, eq(filterGroups.id, notifications.groupId))
       .where(where)
       .orderBy(desc(notifications.createdAt))
       .limit(pagination.pageSize)

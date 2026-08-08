@@ -1,4 +1,4 @@
-import { Loader2Icon } from 'lucide-react';
+import { CheckCircle2Icon, Loader2Icon, MailWarningIcon } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,8 +22,15 @@ import { Switch } from '@/components/ui/switch';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
+  getExistingSubscription,
+  isPushSupported,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from '@/lib/push';
+import {
   useChangePassword,
   useNotificationPreferences,
+  useResendVerification,
   useUpdatePreferences,
   useUpdateProfile,
 } from '@/lib/queries';
@@ -51,13 +58,73 @@ export function ProfilePage() {
         </p>
       </div>
 
+      {user && !user.emailVerifiedAt ? <EmailVerificationBanner /> : null}
+
       <ProfileCard
         user={user}
         onUpdated={(patch) => updateUser(patch)}
       />
-      <PasswordCard onChanged={() => void logout()} />
+      {user?.hasPassword !== false ? (
+        <PasswordCard onChanged={() => void logout()} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Hasło</CardTitle>
+            <CardDescription>
+              To konto zostało założone przez logowanie Google i nie ma hasła.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
       <NotificationPreferencesCard />
     </div>
+  );
+}
+
+function EmailVerificationBanner() {
+  const resend = useResendVerification();
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleResend() {
+    setError(null);
+    try {
+      await resend.mutateAsync();
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nie udało się wysłać e-maila');
+    }
+  }
+
+  return (
+    <Card className="border-amber-500/40 bg-amber-500/5">
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+        <div className="flex items-start gap-3">
+          <MailWarningIcon className="mt-0.5 size-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-medium">Adres e-mail nie jest potwierdzony</p>
+            <p className="text-muted-foreground text-xs">
+              {sent
+                ? 'Link weryfikacyjny wysłany - sprawdź skrzynkę.'
+                : error
+                  ? error
+                  : 'Sprawdź skrzynkę i kliknij link, który wysłaliśmy przy rejestracji.'}
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={resend.isPending || sent}
+          onClick={handleResend}
+        >
+          {resend.isPending ? <Loader2Icon className="animate-spin" /> : null}
+          {sent ? <CheckCircle2Icon /> : null}
+          {sent ? 'Wysłano' : 'Wyślij ponownie'}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -194,10 +261,25 @@ function NotificationPreferencesCard() {
   const preferences = useNotificationPreferences();
   const updatePreferences = useUpdatePreferences();
   const [draft, setDraft] = useState<NotificationPreferences | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     if (preferences.data) setDraft(preferences.data);
   }, [preferences.data]);
+
+  // The stored `pushEnabled` flag is just intent; whether this browser
+  // actually holds a live subscription is separate state to reconcile on load.
+  useEffect(() => {
+    if (!draft?.pushEnabled) return;
+    getExistingSubscription()
+      .then((sub) => {
+        if (!sub) setDraft((current) => (current ? { ...current, pushEnabled: false } : current));
+      })
+      .catch(() => {});
+    // Only needs to run once the preference first loads as enabled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferences.data?.userId]);
 
   if (!draft) {
     return <Skeleton className="h-96" />;
@@ -206,6 +288,23 @@ function NotificationPreferencesCard() {
   function patch(update: Partial<NotificationPreferences>) {
     setDraft((current) => (current ? { ...current, ...update } : current));
     updatePreferences.mutate(update);
+  }
+
+  async function togglePush(enable: boolean): Promise<void> {
+    setPushError(null);
+    setPushBusy(true);
+    try {
+      if (enable) {
+        await subscribeToPush();
+      } else {
+        await unsubscribeFromPush();
+      }
+      patch({ pushEnabled: enable });
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : 'Nie udało się zmienić ustawienia');
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   return (
@@ -235,10 +334,24 @@ function NotificationPreferencesCard() {
           />
           <ToggleRow
             label="Push w przeglądarce"
-            description="Wymaga zgody przeglądarki na powiadomienia"
+            description={
+              pushBusy
+                ? 'Trwa zmiana…'
+                : 'Wymaga zgody przeglądarki na powiadomienia — dotyczy tego urządzenia'
+            }
             checked={draft.pushEnabled}
-            onChange={(v) => patch({ pushEnabled: v })}
+            disabled={pushBusy || !isPushSupported()}
+            onChange={(v) => void togglePush(v)}
           />
+          {!isPushSupported() ? (
+            <p className="text-muted-foreground text-xs">
+              Ta przeglądarka nie obsługuje powiadomień push.
+            </p>
+          ) : pushError ? (
+            <p className="text-destructive text-xs" role="alert">
+              {pushError}
+            </p>
+          ) : null}
         </section>
 
         <Separator />
@@ -364,11 +477,13 @@ function ToggleRow({
   label,
   description,
   checked,
+  disabled,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
@@ -379,7 +494,7 @@ function ToggleRow({
           <p className="text-muted-foreground text-xs">{description}</p>
         ) : null}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch checked={checked} disabled={disabled} onCheckedChange={onChange} />
     </div>
   );
 }

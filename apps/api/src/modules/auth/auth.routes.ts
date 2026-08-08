@@ -1,9 +1,12 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
-import { env, isProduction } from '../../config/env.js';
+import { env, googleAuthConfigured, isProduction } from '../../config/env.js';
 import { asyncHandler } from '../../lib/async-handler.js';
+import { logger } from '../../config/logger.js';
 import { UnauthorizedError } from '../../lib/errors.js';
 import { authenticate, currentUserId } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { buildGoogleAuthorizeUrl, exchangeGoogleCode } from './google.auth.js';
 import { parseDuration } from './auth.tokens.js';
 import {
   changePasswordSchema,
@@ -11,10 +14,12 @@ import {
   refreshSchema,
   registerSchema,
   updateProfileSchema,
+  verifyEmailSchema,
 } from './auth.schemas.js';
 import * as authService from './auth.service.js';
 
 const REFRESH_COOKIE = 'cf_refresh';
+const OAUTH_STATE_COOKIE = 'cf_oauth_state';
 
 export const authRouter = Router();
 
@@ -119,6 +124,75 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     await authService.logoutAll(currentUserId(req));
     res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+    res.status(204).send();
+  }),
+);
+
+/** Lets the frontend decide whether to render the "Zaloguj przez Google" button at all. */
+authRouter.get('/providers', (_req, res) => {
+  res.json({ google: googleAuthConfigured });
+});
+
+authRouter.get('/google', (req, res) => {
+  if (!googleAuthConfigured) throw new UnauthorizedError('Logowanie Google nie jest skonfigurowane');
+
+  const state = crypto.randomBytes(24).toString('base64url');
+  res.cookie(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/api/auth/google',
+    maxAge: 10 * 60 * 1000,
+  });
+  res.redirect(buildGoogleAuthorizeUrl(state));
+});
+
+authRouter.get(
+  '/google/callback',
+  asyncHandler(async (req, res) => {
+    const loginFailed = (): void => {
+      res.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth/google' });
+      res.redirect(`${env.APP_URL}/login?error=google`);
+    };
+
+    if (!googleAuthConfigured) return loginFailed();
+
+    const { code, state } = req.query;
+    const expectedState = req.cookies?.[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth/google' });
+
+    if (typeof code !== 'string' || typeof state !== 'string' || !expectedState || state !== expectedState) {
+      return loginFailed();
+    }
+
+    try {
+      const profile = await exchangeGoogleCode(code);
+      const result = await authService.loginWithGoogle(profile, {
+        userAgent: req.get('user-agent'),
+        ipAddress: req.ip,
+      });
+      setRefreshCookie(res, result.refreshToken);
+      res.redirect(env.APP_URL);
+    } catch (err) {
+      logger.warn({ err }, 'Logowanie Google nie powiodło się');
+      loginFailed();
+    }
+  }),
+);
+
+authRouter.post(
+  '/verify-email',
+  validate(verifyEmailSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await authService.verifyEmail(req.body.token));
+  }),
+);
+
+authRouter.post(
+  '/resend-verification',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    await authService.resendVerification(currentUserId(req));
     res.status(204).send();
   }),
 );

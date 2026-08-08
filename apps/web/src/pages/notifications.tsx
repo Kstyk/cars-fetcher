@@ -1,7 +1,10 @@
+import { Link } from '@tanstack/react-router';
 import {
   AlertTriangleIcon,
   BellIcon,
   CheckCheckIcon,
+  ExternalLinkIcon,
+  ListIcon,
   SparklesIcon,
   TrendingDownIcon,
   XCircleIcon,
@@ -10,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
-import { formatRelative } from '@/lib/format';
+import { formatRelative, label, PROVIDER_LABELS } from '@/lib/format';
 import { useMarkAllRead, useMarkRead, useNotifications } from '@/lib/queries';
 import type { Notification } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -97,7 +100,36 @@ export function NotificationsPage() {
                   ) : null}
                   <p className="text-muted-foreground mt-1 text-xs">
                     {formatRelative(notification.createdAt)}
+                    {notification.groupName ? ` · ${notification.groupName}` : ''}
                   </p>
+
+                  {/* Both ways on: the filtered list here, or the marketplace. */}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button asChild size="sm" variant="secondary">
+                      <Link
+                        to="/listings"
+                        search={
+                          notification.groupId ? { groupId: notification.groupId } : {}
+                        }
+                      >
+                        <ListIcon />
+                        Zobacz ogłoszenia
+                      </Link>
+                    </Button>
+
+                    {notification.listingUrl ? (
+                      <Button asChild size="sm" variant="outline">
+                        <a
+                          href={notification.listingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLinkIcon />
+                          Otwórz w {label(PROVIDER_LABELS, notification.listingProvider)}
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
 
                 {!notification.readAt ? (

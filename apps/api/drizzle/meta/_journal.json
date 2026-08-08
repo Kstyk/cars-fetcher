@@ -29,6 +29,48 @@
       "when": 1785953029522,
       "tag": "0003_tidy_colleen_wing",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785967287049,
+      "tag": "0004_sparkling_silk_fever",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786025360904,
+      "tag": "0005_massive_loners",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786048679134,
+      "tag": "0006_complex_iron_monger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786049778527,
+      "tag": "0007_sparkling_krista_starr",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786185782184,
+      "tag": "0008_real_stellaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786191069573,
+      "tag": "0009_parched_hawkeye",
+      "breakpoints": true
     }
   ]
 }

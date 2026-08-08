@@ -1,0 +1,1 @@
+ALTER TABLE "filter_groups" ADD COLUMN "previous_fetched_at" timestamp with time zone;

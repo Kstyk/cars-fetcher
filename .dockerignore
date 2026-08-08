@@ -1,0 +1,10 @@
+# Everything the image builds for itself, or must never leak into it.
+node_modules
+**/node_modules
+**/dist
+.git
+.env
+*.log
+apps/web/public/uploads
+.claude
+docs

@@ -1,6 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
-  BellIcon,
   CarFrontIcon,
   HeartIcon,
   LaptopIcon,
@@ -12,7 +11,6 @@ import {
   UserIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,8 +20,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CompareTray } from '@/components/compare-tray';
+import { NotificationBell } from '@/components/notification-bell';
 import { useAuth } from '@/lib/auth';
-import { useUnreadCount } from '@/lib/queries';
 import { useTheme, type Theme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +35,6 @@ const NAV_ITEMS = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
-  const { data: unread } = useUnreadCount();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const initials = user
@@ -51,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="bg-primary text-primary-foreground grid size-7 place-items-center rounded-lg">
               <CarFrontIcon className="size-4" />
             </span>
-            <span className="hidden sm:inline">Cars Fetcher</span>
+            <span className="font-display hidden tracking-tight sm:inline">Cars Fetcher</span>
           </Link>
 
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
@@ -78,19 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <ThemeToggle />
 
-          <Button asChild variant="ghost" size="icon" className="relative">
-            <Link to="/notifications" aria-label="Powiadomienia">
-              <BellIcon />
-              {unread && unread.count > 0 ? (
-                <Badge
-                  variant="destructive"
-                  className="absolute -top-1 -right-1 h-4 min-w-4 justify-center px-1 text-[10px]"
-                >
-                  {unread.count > 99 ? '99+' : unread.count}
-                </Badge>
-              ) : null}
-            </Link>
-          </Button>
+          <NotificationBell />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -128,7 +114,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8 pb-24">{children}</main>
+
+      <CompareTray />
     </div>
   );
 }

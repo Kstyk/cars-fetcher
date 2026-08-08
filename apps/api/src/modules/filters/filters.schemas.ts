@@ -5,6 +5,7 @@ export const providerValues = [
   'olx',
   'autoplac',
   'findcar',
+  'sprzedajemy',
   'mobile_de',
   'autoscout24',
 ] as const;

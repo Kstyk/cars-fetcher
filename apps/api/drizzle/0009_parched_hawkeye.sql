@@ -1,0 +1,1 @@
+CREATE INDEX "listings_market_cohort_idx" ON "listings" USING btree ("make","model","year","mileage_km");

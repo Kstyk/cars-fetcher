@@ -85,35 +85,44 @@ export function Combobox({
         if (!next) setSearch('');
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn('w-full justify-between font-normal', className)}
-        >
-          <span className={cn('truncate', !selected && 'text-muted-foreground')}>
-            {selected?.label ?? placeholder}
-          </span>
-          <span className="flex shrink-0 items-center gap-1">
-            {clearable && selected ? (
-              <XIcon
-                className="hover:text-destructive size-3.5 opacity-60"
-                role="button"
-                aria-label="Wyczyść"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onChange(null);
-                }}
-              />
-            ) : null}
-            <ChevronsUpDownIcon className="size-4 opacity-50" />
-          </span>
-        </Button>
-      </PopoverTrigger>
+      {/*
+        The clear control sits next to the trigger, not inside it. Radix opens
+        the popover on pointerdown, which fires before any click handler nested
+        in the trigger - an X placed there could never win the event.
+      */}
+      <div className="relative">
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn(
+              'w-full justify-between font-normal',
+              clearable && selected && 'pr-14',
+              className,
+            )}
+          >
+            <span className={cn('truncate', !selected && 'text-muted-foreground')}>
+              {selected?.label ?? placeholder}
+            </span>
+            <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+
+        {clearable && selected ? (
+          <button
+            type="button"
+            aria-label="Wyczyść"
+            title="Wyczyść"
+            className="hover:text-destructive text-muted-foreground absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            onClick={() => onChange(null)}
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
 
       <PopoverContent className="w-(--radix-popover-trigger-width)">
         <div className="relative border-b p-2">
@@ -206,20 +215,38 @@ export function MultiCombobox({
 
   return (
     <Popover modal open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className={cn('w-full justify-between font-normal', className)}
-        >
-          <span
-            className={cn('truncate', values.length === 0 && 'text-muted-foreground')}
+      <div className="relative">
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              'w-full justify-between font-normal',
+              values.length > 0 && 'pr-14',
+              className,
+            )}
           >
-            {summary}
-          </span>
-          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+            <span
+              className={cn('truncate', values.length === 0 && 'text-muted-foreground')}
+            >
+              {summary}
+            </span>
+            <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+
+        {values.length > 0 ? (
+          <button
+            type="button"
+            aria-label="Wyczyść"
+            title="Wyczyść"
+            className="hover:text-destructive text-muted-foreground absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            onClick={() => onChange([])}
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
 
       <PopoverContent className="w-(--radix-popover-trigger-width)">
         {options.length > 8 ? (
@@ -244,7 +271,7 @@ export function MultiCombobox({
             >
               <span
                 className={cn(
-                  'grid size-4 shrink-0 place-items-center rounded-[4px] border',
+                  'grid size-4 shrink-0 place-items-center rounded-sm border',
                   values.includes(option.value) &&
                     'bg-primary border-primary text-primary-foreground',
                 )}

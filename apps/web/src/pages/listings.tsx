@@ -1,5 +1,7 @@
 import { CarFrontIcon, SearchIcon, XIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import type { ListingsSearch } from '@/router';
 import { ListingCard } from '@/components/listing-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +59,7 @@ interface Filters {
   countryOrigin: string[];
   color: string[];
   bodyType: string;
+  archived: string;
   sort: string;
 }
 
@@ -76,13 +79,86 @@ const EMPTY_FILTERS: Filters = {
   countryOrigin: [],
   color: [],
   bodyType: ALL,
+  archived: 'no',
   sort: 'newest',
 };
 
+/** URL -> form state. Missing parameters fall back to "no restriction". */
+function fromSearch(search: ListingsSearch): Filters {
+  const text = (value: number | undefined) =>
+    value === undefined ? '' : String(value);
+
+  return {
+    q: search.q ?? '',
+    groupId: search.groupId ?? ALL,
+    provider: search.provider ?? [],
+    make: search.make ?? null,
+    model: search.model ?? null,
+    fuelType: search.fuelType ?? ALL,
+    gearbox: search.gearbox ?? ALL,
+    bodyType: search.bodyType ?? ALL,
+    archived: search.archived ?? 'no',
+    priceFrom: text(search.priceFrom),
+    priceTo: text(search.priceTo),
+    yearFrom: text(search.yearFrom),
+    mileageTo: text(search.mileageTo),
+    powerFrom: text(search.powerFrom),
+    countryOrigin: search.countryOrigin ?? [],
+    color: search.color ?? [],
+    sort: search.sort ?? 'newest',
+  };
+}
+
+function locationFromSearch(search: ListingsSearch): LocationValue {
+  return {
+    regions: search.region ?? [],
+    city: search.city ?? null,
+    radiusKm: search.radiusKm ?? null,
+    point:
+      search.lat !== undefined && search.lon !== undefined
+        ? { lat: search.lat, lon: search.lon }
+        : null,
+  };
+}
+
+/** Drops defaults so the address bar only carries what the user actually set. */
+function pruneSearch(search: ListingsSearch): ListingsSearch {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(search)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (key === 'sort' && value === 'newest') continue;
+    if (key === 'archived' && value === 'no') continue;
+    if (key === 'page' && value === 1) continue;
+    cleaned[key] = value;
+  }
+  return cleaned as ListingsSearch;
+}
+
 export function ListingsPage() {
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
-  const [page, setPage] = useState(1);
+  // `strict: false` keeps this decoupled from the generated route id - the
+  // shape is already guaranteed by the route's `validateSearch`.
+  const search = useSearch({ strict: false }) as ListingsSearch;
+  const navigate = useNavigate();
+
+  const filters = useMemo(() => fromSearch(search), [search]);
+  const location = useMemo(() => locationFromSearch(search), [search]);
+  const page = search.page ?? 1;
+
+  /** Writes to the URL; `replace` keeps filter tweaks out of the back stack. */
+  const applySearch = useCallback(
+    (patch: Partial<ListingsSearch>) => {
+      void navigate({
+        to: '/listings',
+        search: (prev: ListingsSearch) => pruneSearch({ ...prev, ...patch }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const setPage = (next: number) => applySearch({ page: next });
+
   const groups = useFilterGroups();
   const taxonomy = useTaxonomy();
   const providers = useProviders();
@@ -127,14 +203,17 @@ export function ListingsPage() {
     ...(filters.countryOrigin.length ? { countryOrigin: filters.countryOrigin } : {}),
     ...(filters.color.length ? { color: filters.color } : {}),
     ...(filters.bodyType !== ALL ? { bodyType: filters.bodyType } : {}),
+    archived: filters.archived,
     ...locationToParams(location),
   };
 
   const listings = useListings(params);
 
+  /** Sentinel values and empty strings are dropped by `pruneSearch`. */
   function update<K extends keyof Filters>(key: K, value: Filters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
-    setPage(1);
+    const serialised =
+      value === ALL || value === '' || value === null ? undefined : value;
+    applySearch({ [key]: serialised, page: undefined } as Partial<ListingsSearch>);
   }
 
   const hasActiveFilters =
@@ -205,7 +284,7 @@ export function ListingsPage() {
               placeholder="Wszystkie"
               // A new make invalidates whatever model was picked.
               onChange={(make) => {
-                setFilters((current) => ({ ...current, make, model: null }));
+                applySearch({ make: make ?? undefined, model: undefined, page: undefined });
                 setPage(1);
               }}
             />
@@ -221,6 +300,23 @@ export function ListingsPage() {
               emptyText="Brak modeli"
               onChange={(model) => update('model', model)}
             />
+          </div>
+
+          <div className="w-40 space-y-1.5">
+            <Label>Zarchiwizowane</Label>
+            <Select
+              value={filters.archived}
+              onValueChange={(v) => update('archived', v)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no">Nie</SelectItem>
+                <SelectItem value="yes">Tylko sprzedane</SelectItem>
+                <SelectItem value="all">Wszystkie</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
@@ -291,7 +387,14 @@ export function ListingsPage() {
             value={location}
             cities={cityNames}
             onChange={(next) => {
-              setLocation(next);
+              applySearch({
+                region: next.regions.length ? next.regions : undefined,
+                city: next.city ?? undefined,
+                radiusKm: next.radiusKm ?? undefined,
+                lat: next.point?.lat,
+                lon: next.point?.lon,
+                page: undefined,
+              });
               setPage(1);
             }}
           />
@@ -370,8 +473,7 @@ export function ListingsPage() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                setFilters(EMPTY_FILTERS);
-                setLocation(EMPTY_LOCATION);
+                void navigate({ to: '/listings', search: {}, replace: true });
                 setPage(1);
               }}
             >
@@ -405,7 +507,7 @@ export function ListingsPage() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
+                onClick={() => setPage(page - 1)}
               >
                 Poprzednia
               </Button>
@@ -416,7 +518,7 @@ export function ListingsPage() {
                 variant="outline"
                 size="sm"
                 disabled={page >= listings.data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => setPage(page + 1)}
               >
                 Następna
               </Button>

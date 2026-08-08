@@ -49,6 +49,9 @@ export interface User {
   firstName: string;
   lastName: string;
   role: 'user' | 'admin';
+  emailVerifiedAt: string | null;
+  /** false dla kont założonych przez logowanie Google - nie ma czego zmieniać. */
+  hasPassword: boolean;
   createdAt: string;
 }
 
@@ -155,15 +158,31 @@ export interface Listing {
   firstSeenAt: string;
   lastSeenAt: string;
   isActive: boolean;
+  isArchived: boolean;
+  archivedAt: string | null;
   isFavorite: boolean;
   groups: ListingGroup[];
   priceChangePct: number | null;
+  /** Negative = below the market median for similar cars. `null` = not enough comparables. */
+  priceVsMarketPct: number | null;
 }
 
 export interface ListingGroup {
   id: string;
   name: string;
   color: string | null;
+}
+
+export interface PriceHistoryEntry {
+  price: number | null;
+  currency: string;
+  deltaAmount: number | null;
+  deltaPct: number | null;
+  recordedAt: string;
+}
+
+export interface ListingDetail extends Listing {
+  priceHistory: PriceHistoryEntry[];
 }
 
 /* ------------------------------- taxonomy -------------------------------- */
@@ -208,7 +227,17 @@ export interface ListingStats {
   fresh24h: number;
   avgPrice: number | null;
   favorites: number;
+  /** Listings that disappeared from the marketplace - assumed sold. */
+  archived: number;
   byMake: Array<{ make: string | null; count: number; avgPrice: number | null }>;
+  soldByModel: Array<{
+    make: string | null;
+    model: string | null;
+    total: number;
+    sold: number;
+    avgSoldPrice: number | null;
+    medianDaysToSell: number | null;
+  }>;
 }
 
 export interface Notification {
@@ -227,6 +256,10 @@ export interface Notification {
   groupId: string | null;
   readAt: string | null;
   createdAt: string;
+  /** Deep link to the marketplace, when the notification is about a listing. */
+  listingUrl: string | null;
+  listingProvider: Provider | null;
+  groupName: string | null;
 }
 
 export interface NotificationPreferences {
@@ -249,6 +282,10 @@ export interface NotificationPreferences {
 export interface FetchRun {
   id: string;
   filterId: string | null;
+  filterName: string | null;
+  filterMake: string | null;
+  filterModel: string | null;
+  filterProvider: Provider | null;
   status: string;
   trigger: string;
   pagesFetched: number;

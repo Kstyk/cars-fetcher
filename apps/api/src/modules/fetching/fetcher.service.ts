@@ -68,9 +68,14 @@ export async function runGroup(
     results.push(await runFilter(filter, group.id, userId, trigger, group.notifyOnNew));
   }
 
+  // The previous marker moves up to where this run began, so "new since last
+  // fetch" is measured against the run before this one.
   await db
     .update(filterGroups)
-    .set({ lastFetchedAt: new Date() })
+    .set({
+      previousFetchedAt: new Date(startedAt),
+      lastFetchedAt: new Date(),
+    })
     .where(eq(filterGroups.id, groupId));
 
   return {

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { logger } from '../../config/logger.js';
 import { db } from '../../db/client.js';
 import {
   notificationPreferences,
@@ -12,15 +13,21 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../../lib/errors.js';
+import { sendVerificationEmail } from '../notifications/email.service.js';
+import type { GoogleProfile } from './google.auth.js';
 import {
-  generateRefreshToken,
-  hashRefreshToken,
+  generateOpaqueToken,
+  hashOpaqueToken,
+  parseDuration,
   refreshTokenExpiry,
   signAccessToken,
 } from './auth.tokens.js';
 import type { LoginInput, RegisterInput } from './auth.schemas.js';
 
 const BCRYPT_ROUNDS = 12;
+const EMAIL_VERIFICATION_TTL = '24h';
+/** A resend before this much time has passed is a no-op, not a new e-mail. */
+const RESEND_COOLDOWN_MS = 60_000;
 
 export interface AuthResult {
   user: PublicUser;
@@ -34,6 +41,9 @@ export interface PublicUser {
   firstName: string;
   lastName: string;
   role: 'user' | 'admin';
+  emailVerifiedAt: Date | null;
+  /** Lets the UI hide password-change for Google-only accounts. */
+  hasPassword: boolean;
   createdAt: Date;
 }
 
@@ -49,6 +59,8 @@ export function toPublicUser(user: User): PublicUser {
     firstName: user.firstName,
     lastName: user.lastName,
     role: user.role,
+    emailVerifiedAt: user.emailVerifiedAt,
+    hasPassword: user.passwordHash !== null,
     createdAt: user.createdAt,
   };
 }
@@ -89,6 +101,12 @@ export async function register(
     return created;
   });
 
+  // Best-effort: a dead SMTP server must not fail registration. The user can
+  // always hit "resend" once mail delivery is sorted out.
+  await sendVerificationLink(user).catch((err) => {
+    logger.warn({ err, userId: user.id }, 'Nie udało się wysłać e-maila weryfikacyjnego');
+  });
+
   return issueSession(user, ctx);
 }
 
@@ -104,8 +122,8 @@ export async function login(
     .where(sql`lower(${users.email}) = ${email}`)
     .limit(1);
 
-  // Compare against a dummy hash when the user is missing so the response time
-  // does not reveal whether the address is registered.
+  // Compare against a dummy hash when the user is missing, or has none (a
+  // Google-only account), so the response time reveals neither.
   const hash = user?.passwordHash ?? '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva';
   const passwordMatches = await bcrypt.compare(input.password, hash);
 
@@ -132,7 +150,7 @@ export async function refresh(
   token: string,
   ctx: SessionContext = {},
 ): Promise<AuthResult> {
-  const tokenHash = hashRefreshToken(token);
+  const tokenHash = hashOpaqueToken(token);
 
   const [stored] = await db
     .select()
@@ -154,7 +172,7 @@ export async function refresh(
     throw new UnauthorizedError('Konto jest niedostępne');
   }
 
-  const rotated = generateRefreshToken();
+  const rotated = generateOpaqueToken();
   await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(refreshTokens)
@@ -190,7 +208,7 @@ export async function logout(token: string): Promise<void> {
     .set({ revokedAt: new Date() })
     .where(
       and(
-        eq(refreshTokens.tokenHash, hashRefreshToken(token)),
+        eq(refreshTokens.tokenHash, hashOpaqueToken(token)),
         isNull(refreshTokens.revokedAt),
       ),
     );
@@ -231,6 +249,11 @@ export async function changePassword(
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError('Użytkownik nie istnieje');
 
+  if (!user.passwordHash) {
+    throw new UnauthorizedError(
+      'To konto zostało założone przez logowanie Google i nie ma hasła',
+    );
+  }
   if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
     throw new UnauthorizedError('Obecne hasło jest nieprawidłowe');
   }
@@ -247,8 +270,142 @@ export async function changePassword(
   await logoutAll(userId);
 }
 
+/**
+ * Finds or creates a user for a verified Google identity.
+ *
+ * Three cases:
+ *  - `googleId` already on file -> that account, unchanged.
+ *  - No `googleId` match, but the e-mail exists (a password account) -> the
+ *    Google identity is linked to it. Google already verified the address,
+ *    so `emailVerifiedAt` is stamped if it was not already.
+ *  - Neither matches -> a brand new account, password-less, pre-verified.
+ */
+export async function loginWithGoogle(
+  profile: GoogleProfile,
+  ctx: SessionContext = {},
+): Promise<AuthResult> {
+  const [byGoogleId] = await db
+    .select()
+    .from(users)
+    .where(eq(users.googleId, profile.id))
+    .limit(1);
+
+  if (byGoogleId) {
+    if (!byGoogleId.isActive) throw new UnauthorizedError('Konto zostało zablokowane');
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, byGoogleId.id));
+    return issueSession(byGoogleId, ctx);
+  }
+
+  const [byEmail] = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.email}) = ${profile.email}`)
+    .limit(1);
+
+  if (byEmail) {
+    if (!byEmail.isActive) throw new UnauthorizedError('Konto zostało zablokowane');
+
+    const [linked] = await db
+      .update(users)
+      .set({
+        googleId: profile.id,
+        emailVerifiedAt: byEmail.emailVerifiedAt ?? new Date(),
+        lastLoginAt: new Date(),
+      })
+      .where(eq(users.id, byEmail.id))
+      .returning();
+
+    return issueSession(linked ?? byEmail, ctx);
+  }
+
+  const created = await db.transaction(async (tx) => {
+    const [user] = await tx
+      .insert(users)
+      .values({
+        email: profile.email,
+        passwordHash: null,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        googleId: profile.id,
+        // Google already confirmed the address; no reason to ask again.
+        emailVerifiedAt: new Date(),
+        lastLoginAt: new Date(),
+      })
+      .returning();
+
+    if (!user) throw new Error('Nie udało się utworzyć użytkownika');
+    await tx.insert(notificationPreferences).values({ userId: user.id });
+    return user;
+  });
+
+  return issueSession(created, ctx);
+}
+
+/* ----------------------------- e-mail verification ----------------------------- */
+
+async function sendVerificationLink(user: User): Promise<void> {
+  const { token, tokenHash } = generateOpaqueToken();
+
+  await db
+    .update(users)
+    .set({
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpiresAt: new Date(Date.now() + parseDuration(EMAIL_VERIFICATION_TTL)),
+      emailVerificationSentAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
+
+  await sendVerificationEmail(user.email, token);
+}
+
+export async function verifyEmail(token: string): Promise<PublicUser> {
+  const tokenHash = hashOpaqueToken(token);
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(
+      and(
+        eq(users.emailVerificationTokenHash, tokenHash),
+        gt(users.emailVerificationExpiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+
+  if (!user) {
+    throw new UnauthorizedError('Link weryfikacyjny jest nieprawidłowy lub wygasł');
+  }
+
+  const [updated] = await db
+    .update(users)
+    .set({
+      emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+    })
+    .where(eq(users.id, user.id))
+    .returning();
+
+  return toPublicUser(updated ?? user);
+}
+
+export async function resendVerification(userId: string): Promise<void> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new NotFoundError('Użytkownik nie istnieje');
+  if (user.emailVerifiedAt) return; // Already verified - nothing to resend.
+
+  if (
+    user.emailVerificationSentAt &&
+    Date.now() - user.emailVerificationSentAt.getTime() < RESEND_COOLDOWN_MS
+  ) {
+    throw new ConflictError('Odczekaj chwilę przed ponownym wysłaniem');
+  }
+
+  await sendVerificationLink(user);
+}
+
 async function issueSession(user: User, ctx: SessionContext): Promise<AuthResult> {
-  const { token, tokenHash } = generateRefreshToken();
+  const { token, tokenHash } = generateOpaqueToken();
 
   await db.insert(refreshTokens).values({
     userId: user.id,

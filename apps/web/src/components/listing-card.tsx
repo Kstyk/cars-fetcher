@@ -1,4 +1,7 @@
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BadgePercentIcon,
   CarFrontIcon,
   ExternalLinkIcon,
   FuelIcon,
@@ -6,15 +9,24 @@ import {
   GlobeIcon,
   HeartIcon,
   ImageOffIcon,
+  LineChartIcon,
   MapPinIcon,
   SettingsIcon,
-  TrendingDownIcon,
   ZapIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { PriceHistoryChart } from '@/components/price-history-chart';
+import { COMPARE_LIMIT, useCompare } from '@/lib/compare';
 import {
   FUEL_LABELS,
   GEARBOX_LABELS,
@@ -27,7 +39,7 @@ import {
   formatRelative,
   label,
 } from '@/lib/format';
-import { useToggleFavorite } from '@/lib/queries';
+import { useListingDetail, useToggleFavorite } from '@/lib/queries';
 import type { Listing } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +49,10 @@ import { cn } from '@/lib/utils';
  */
 export function ListingCard({ listing }: { listing: Listing }) {
   const toggleFavorite = useToggleFavorite();
+  const compare = useCompare();
   const [imageFailed, setImageFailed] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const compareSelected = compare.isSelected(listing.id);
 
   // Dates shown to the user are the marketplace's, not our fetch time.
   // `firstSeenAt` is the fallback for providers that do not publish one.
@@ -67,7 +82,30 @@ export function ListingCard({ listing }: { listing: Listing }) {
           </div>
         )}
 
-        <div className="absolute top-2 left-2 flex flex-wrap gap-1.5">
+        <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5">
+          {/*
+            A checkbox nested in an anchor: click handling on this wrapper
+            runs after Radix's own (which already toggled the checked state),
+            so preventDefault here only ever cancels the card's navigation.
+          */}
+          <div
+            className="bg-background/90 rounded-md border p-1 shadow-sm"
+            onClick={(event) => event.preventDefault()}
+            title={
+              compareSelected
+                ? 'Usuń z porównania'
+                : compare.isFull
+                  ? `Można porównać maks. ${COMPARE_LIMIT} oferty naraz`
+                  : 'Dodaj do porównania'
+            }
+          >
+            <Checkbox
+              checked={compareSelected}
+              disabled={!compareSelected && compare.isFull}
+              aria-label="Dodaj do porównania"
+              onCheckedChange={() => compare.toggle(listing)}
+            />
+          </div>
           {/* Which marketplace this came from - the same car can appear on several. */}
           <Badge
             className="border-transparent text-white"
@@ -76,13 +114,22 @@ export function ListingCard({ listing }: { listing: Listing }) {
             {label(PROVIDER_LABELS, listing.provider)}
           </Badge>
           {isFresh ? <Badge variant="success">Nowe</Badge> : null}
-          {!listing.isActive ? (
+          {listing.isArchived ? (
+            <Badge variant="secondary" title="Ogłoszenie zniknęło z serwisu">
+              Sprzedane
+            </Badge>
+          ) : !listing.isActive ? (
             <Badge variant="secondary">Nieaktywne</Badge>
           ) : null}
-          {listing.priceChangePct !== null && listing.priceChangePct < 0 ? (
-            <Badge variant="destructive" className="gap-1">
-              <TrendingDownIcon />
-              {listing.priceChangePct.toFixed(1)}%
+          {/* Meaningfully below similar cars (same make/model, ±1 rok, ±30% przebiegu) - a few % isn't worth flagging. */}
+          {listing.priceVsMarketPct !== null && listing.priceVsMarketPct <= -10 ? (
+            <Badge
+              variant="success"
+              className="gap-1"
+              title="Cena poniżej mediany podobnych ofert (ta sama marka/model, zbliżony rocznik i przebieg)"
+            >
+              <BadgePercentIcon />
+              {Math.abs(listing.priceVsMarketPct).toFixed(0)}% poniżej rynku
             </Badge>
           ) : null}
         </div>
@@ -139,7 +186,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
       ) : null}
 
       <div className="px-5 pt-3">
-        <h3 className="truncate font-semibold" title={listing.title}>
+        <h3 className="font-display truncate font-semibold" title={listing.title}>
           {listing.title}
         </h3>
         <p className="text-muted-foreground truncate text-sm">
@@ -147,13 +194,26 @@ export function ListingCard({ listing }: { listing: Listing }) {
           {listing.year ? ` · ${listing.year}` : ''}
           {listing.version ? ` · ${listing.version}` : ''}
         </p>
-        <p className="tabular mt-2 text-2xl font-semibold">
+        <p className="data-figure mt-2 flex items-baseline gap-1.5 text-2xl font-semibold">
           {formatPrice(listing.price, listing.currency)}
+          {/* Ticker arrow - the price this listing is watched against moved. */}
+          {listing.priceChangePct !== null ? (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 text-sm font-medium',
+                listing.priceChangePct < 0 ? 'text-success' : 'text-destructive',
+              )}
+              title={`Zmiana ceny: ${listing.priceChangePct > 0 ? '+' : ''}${listing.priceChangePct.toFixed(1)}%`}
+            >
+              {listing.priceChangePct < 0 ? <ArrowDownIcon className="size-3.5" /> : <ArrowUpIcon className="size-3.5" />}
+              {Math.abs(listing.priceChangePct).toFixed(1)}%
+            </span>
+          ) : null}
         </p>
       </div>
 
       <dl className="text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 px-5 pt-4 text-sm">
-        <Spec icon={<GaugeIcon />} value={formatMileage(listing.mileageKm)} />
+        <Spec icon={<GaugeIcon />} value={formatMileage(listing.mileageKm)} mono />
         <Spec icon={<FuelIcon />} value={label(FUEL_LABELS, listing.fuelType)} />
         <Spec
           icon={<SettingsIcon />}
@@ -162,6 +222,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
         <Spec
           icon={<ZapIcon />}
           value={listing.enginePowerHp ? `${listing.enginePowerHp} KM` : '—'}
+          mono
         />
         <Spec icon={<MapPinIcon />} value={listing.city ?? '—'} />
         {/* Country of origin only when the advert actually declares it. */}
@@ -175,6 +236,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
                 ? `${(listing.engineCapacityCm3 / 1000).toFixed(1)} l`
                 : '—'
             }
+            mono
           />
         )}
       </dl>
@@ -188,14 +250,68 @@ export function ListingCard({ listing }: { listing: Listing }) {
           {listing.sellerName ?? label(SELLER_LABELS, listing.sellerType)} ·{' '}
           {formatRelative(publishedAt)}
         </span>
-        <Button asChild size="sm" variant="outline" className="shrink-0">
-          <a href={listing.url} target="_blank" rel="noopener noreferrer">
-            Oferta
-            <ExternalLinkIcon />
-          </a>
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="Historia ceny"
+            title="Historia ceny"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <LineChartIcon />
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href={listing.url} target="_blank" rel="noopener noreferrer">
+              Oferta
+              <ExternalLinkIcon />
+            </a>
+          </Button>
+        </div>
       </div>
+
+      <PriceHistoryDialog
+        listingId={listing.id}
+        title={listing.title}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </Card>
+  );
+}
+
+function PriceHistoryDialog({
+  listingId,
+  title,
+  open,
+  onOpenChange,
+}: {
+  listingId: string;
+  title: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const detail = useListingDetail(listingId, { enabled: open });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="truncate">Historia ceny</DialogTitle>
+        </DialogHeader>
+        {detail.isLoading ? (
+          <div className="text-muted-foreground py-10 text-center text-sm">Wczytuję…</div>
+        ) : detail.data ? (
+          <PriceHistoryChart entries={detail.data.priceHistory} />
+        ) : (
+          <p className="text-muted-foreground py-10 text-center text-sm">
+            Nie udało się wczytać historii ceny.
+          </p>
+        )}
+        <p className="text-muted-foreground truncate text-xs" title={title}>
+          {title}
+        </p>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -203,15 +319,18 @@ function Spec({
   icon,
   value,
   className,
+  mono,
 }: {
   icon: React.ReactNode;
   value: string;
   className?: string;
+  /** Numeric readouts (km, KM, litres) get the data-figure treatment too. */
+  mono?: boolean;
 }) {
   return (
     <div className={cn('flex items-center gap-2 truncate', className)}>
       <span className="shrink-0 opacity-70 [&>svg]:size-3.5">{icon}</span>
-      <span className="truncate">{value}</span>
+      <span className={cn('truncate', mono && 'data-figure')}>{value}</span>
     </div>
   );
 }

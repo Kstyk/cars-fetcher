@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { env, pushConfigured } from '../../config/env.js';
 import { asyncHandler } from '../../lib/async-handler.js';
 import {
   authenticate,
@@ -37,6 +38,17 @@ const pushSubscriptionSchema = z.object({
 });
 
 export const notificationsRouter = Router();
+
+// Public: the subscribe flow needs this key before the user has necessarily
+// done anything else, and it carries no secret (VAPID_PRIVATE_KEY stays server-side).
+notificationsRouter.get('/push/vapid-public-key', (_req, res) => {
+  if (!pushConfigured) {
+    res.status(404).json({ error: { code: 'not_configured', message: 'Push nie jest skonfigurowany' } });
+    return;
+  }
+  res.json({ publicKey: env.VAPID_PUBLIC_KEY });
+});
+
 notificationsRouter.use(authenticate);
 
 notificationsRouter.get(

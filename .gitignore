@@ -16,3 +16,11 @@ coverage/
 # before .tsx and would silently serve stale compiled output.
 apps/web/src/**/*.js
 apps/web/src/**/*.js.map
+
+# Same trap one level up: a stale vite.config.js shadows vite.config.ts.
+apps/*/vite.config.js
+apps/*/drizzle.config.js
+
+# Docker deploy hook artefacts
+.docker-deploy-stamp
+docker-deploy.log

@@ -12,7 +12,10 @@ export default defineConfig({
     alias: { '@': path.resolve(rootDir, 'src') },
   },
   server: {
-    port: 5173,
+    // 5173 is Vite's default and collides with other projects; a fixed port
+    // also keeps the login cookie tied to one origin between restarts.
+    port: 5180,
+    strictPort: true,
     proxy: {
       // Keeps the browser on one origin, so the refresh cookie just works.
       '/api': {

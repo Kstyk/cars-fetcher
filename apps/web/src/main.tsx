@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { ApiError } from '@/lib/api';
 import { AuthProvider } from '@/lib/auth';
+import { CompareProvider } from '@/lib/compare';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { router } from '@/router';
 
@@ -37,8 +38,10 @@ createRoot(rootElement).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RouterProvider router={router} />
-          <ThemedToaster />
+          <CompareProvider>
+            <RouterProvider router={router} />
+            <ThemedToaster />
+          </CompareProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

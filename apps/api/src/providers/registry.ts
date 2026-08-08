@@ -6,6 +6,7 @@ import { fixtureSource } from './fixture/fixture.source.js';
 import { olxSource } from './olx/olx.source.js';
 import { otomotoScraperSource } from './otomoto/otomoto-scraper.source.js';
 import { otomotoSource } from './otomoto/otomoto.source.js';
+import { sprzedajemySource } from './sprzedajemy/sprzedajemy.source.js';
 import { UnimplementedSource } from './unimplemented.source.js';
 import type { ListingSource, ProviderName } from './types.js';
 
@@ -22,6 +23,7 @@ sources.set('otomoto', resolveOtomotoSource());
 sources.set('olx', olxSource);
 sources.set('autoplac', autoplacSource);
 sources.set('findcar', findcarSource);
+sources.set('sprzedajemy', sprzedajemySource);
 
 /** Human-readable names for the provider picker in the UI. */
 const PROVIDER_LABELS: Record<ProviderName, string> = {
@@ -29,6 +31,7 @@ const PROVIDER_LABELS: Record<ProviderName, string> = {
   olx: 'OLX',
   autoplac: 'autoplac.pl',
   findcar: 'FindCar',
+  sprzedajemy: 'Sprzedajemy.pl',
   mobile_de: 'mobile.de',
   autoscout24: 'AutoScout24',
 };

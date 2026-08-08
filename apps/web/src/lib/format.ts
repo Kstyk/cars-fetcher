@@ -111,6 +111,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   olx: 'OLX',
   autoplac: 'autoplac.pl',
   findcar: 'FindCar',
+  sprzedajemy: 'Sprzedajemy.pl',
   mobile_de: 'mobile.de',
   autoscout24: 'AutoScout24',
 };
@@ -121,6 +122,7 @@ export const PROVIDER_COLORS: Record<string, string> = {
   olx: '#23e5db',
   autoplac: '#ff6b00',
   findcar: '#7c3aed',
+  sprzedajemy: '#ec4899',
   mobile_de: '#f59e0b',
   autoscout24: '#eab308',
 };

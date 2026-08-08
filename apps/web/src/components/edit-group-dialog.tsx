@@ -29,7 +29,7 @@ function toDraft(group: FilterGroup): GroupDraft {
   return {
     name: group.name,
     description: group.description ?? '',
-    color: group.color ?? '#2563eb',
+    color: group.color ?? '#007d7e',
     refreshIntervalMinutes: group.refreshIntervalMinutes,
     notifyOnNew: group.notifyOnNew,
     isActive: group.isActive,

@@ -25,6 +25,7 @@ export const providerEnum = pgEnum('provider', [
   'olx',
   'autoplac',
   'findcar',
+  'sprzedajemy',
   'mobile_de',
   'autoscout24',
 ]);
@@ -122,12 +123,27 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     email: varchar('email', { length: 320 }).notNull(),
-    passwordHash: text('password_hash').notNull(),
+    /** Null for accounts created via Google - there is no password to check. */
+    passwordHash: text('password_hash'),
     firstName: varchar('first_name', { length: 100 }).notNull(),
     lastName: varchar('last_name', { length: 100 }).notNull(),
     role: userRoleEnum('role').notNull().default('user'),
     isActive: boolean('is_active').notNull().default(true),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    /** Set once, on first Google sign-in; also used to link an existing
+     * password account when the Google email matches. */
+    googleId: varchar('google_id', { length: 64 }),
+    /** Hashed like refresh tokens - a leaked DB dump cannot forge a verify link. */
+    emailVerificationTokenHash: varchar('email_verification_token_hash', {
+      length: 64,
+    }),
+    emailVerificationExpiresAt: timestamp('email_verification_expires_at', {
+      withTimezone: true,
+    }),
+    /** Throttles "resend" so one click cannot be turned into a mail bomb. */
+    emailVerificationSentAt: timestamp('email_verification_sent_at', {
+      withTimezone: true,
+    }),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -139,6 +155,7 @@ export const users = pgTable(
   (t) => [
     // Case-insensitive uniqueness: nobody registers "Jan@x.pl" over "jan@x.pl".
     uniqueIndex('users_email_lower_unique').on(sql`lower(${t.email})`),
+    uniqueIndex('users_google_id_unique').on(t.googleId),
   ],
 );
 
@@ -251,6 +268,11 @@ export const filterGroups = pgTable(
       .notNull()
       .default(60),
     lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+    /**
+     * When the run before the last one started. The "new" badge counts matches
+     * discovered since this moment, so every completed fetch clears it.
+     */
+    previousFetchedAt: timestamp('previous_fetched_at', { withTimezone: true }),
     position: integer('position').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -421,6 +443,15 @@ export const listings = pgTable(
       .defaultNow(),
     isActive: boolean('is_active').notNull().default(true),
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    /**
+     * The advert vanished from the marketplace, which we read as sold.
+     *
+     * Distinct from `is_active`: that flag flips back the moment the listing
+     * reappears, while archiving records that it was once gone - the basis for
+     * the sold-vs-listed statistics.
+     */
+    isArchived: boolean('is_archived').notNull().default(false),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
 
     /** Untouched provider payload - lets us backfill columns without refetching. */
     raw: jsonb('raw').$type<Record<string, unknown>>(),
@@ -442,6 +473,11 @@ export const listings = pgTable(
     index('listings_year_idx').on(t.year),
     index('listings_last_seen_idx').on(t.lastSeenAt),
     index('listings_active_idx').on(t.isActive, t.publishedAt),
+    index('listings_archived_idx').on(t.isArchived, t.archivedAt),
+    index('listings_make_model_archived_idx').on(t.make, t.model, t.isArchived),
+    // Backs the "good price" market-median comparison - same cohort lookup
+    // every listings page load runs once per row.
+    index('listings_market_cohort_idx').on(t.make, t.model, t.year, t.mileageKm),
   ],
 );
 
@@ -552,6 +588,16 @@ export const notifications = pgTable(
     payload: jsonb('payload').$type<Record<string, unknown>>(),
     readAt: timestamp('read_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
+    /**
+     * Per-channel delivery outcomes. One `notifications` row is the canonical
+     * event (shown in the bell); these record whether it also went out by
+     * e-mail / push, independent of the in-app read state. Null means "not
+     * attempted" - either the channel is off, or dispatch hasn't run yet.
+     */
+    emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+    emailError: text('email_error'),
+    pushSentAt: timestamp('push_sent_at', { withTimezone: true }),
+    pushError: text('push_error'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

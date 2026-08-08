@@ -155,12 +155,16 @@ const API_URL = 'https://www.olx.pl/api/v1/offers/';
  * `Allow: /api/v1/offers/`, so this is the sanctioned path - JSON straight from
  * the source, no HTML parsing.
  *
- * Two quirks shape the implementation:
+ * Three quirks shape the implementation:
  *   1. There is no make filter. The API rejects `filter_enum_make` with
  *      "Dynamic filters not applicable for category 84", because every make is
  *      its own category (Volvo = 208). Hence the slug -> category map.
  *   2. Offers carry richer attributes than Otomoto's search results - body
  *      type, colour and drive are all present here.
+ *   3. CloudFront hands back a hard 403 to plain `fetch`/curl on this domain
+ *      regardless of headers, but lets a real browser through - `useBrowser`
+ *      routes this adapter's requests through headless Chromium instead
+ *      (see `browser-fetch.ts`).
  */
 export class OlxSource implements ListingSource {
   readonly provider = 'olx' as const;
@@ -181,6 +185,9 @@ export class OlxSource implements ListingSource {
     const body = await this.http.fetchHtml(url, {
       signal: options.signal,
       headers: { Accept: 'application/json' },
+      // Plain `fetch` gets a hard 403 from OLX's CloudFront regardless of
+      // headers - only a real browser TLS/HTTP2 fingerprint gets through.
+      useBrowser: true,
     });
 
     let payload: OlxResponse;
@@ -196,7 +203,7 @@ export class OlxSource implements ListingSource {
 
     const offers = payload.data ?? [];
     const items = offers
-      .map((offer) => this.toListing(offer))
+      .map((offer) => this.toListing(offer, criteria.make ?? null))
       .filter((listing): listing is NormalizedListing => listing !== null)
       // The API has no make filter, so the make is enforced here.
       .filter((listing) => matchesCriteria(listing, criteria));
@@ -312,7 +319,11 @@ export class OlxSource implements ListingSource {
     return this.taxonomy;
   }
 
-  private toListing(offer: OlxOffer): NormalizedListing | null {
+  private toListing(
+    offer: OlxOffer,
+    /** The searched make - OLX encodes it in the category, not in the offer. */
+    searchedMake: string | null,
+  ): NormalizedListing | null {
     const externalId = String(offer.id ?? '').trim();
     const url = offer.url?.trim();
     if (!externalId || !url) return null;
@@ -340,8 +351,10 @@ export class OlxSource implements ListingSource {
       url,
       title: (offer.title ?? 'Ogłoszenie').slice(0, 500),
 
-      // The make comes from the category, so it is read back off the title.
-      make: null,
+      // Offers carry no make field - the category implies it. When the search
+      // was not scoped to one make, fall back to the first word of the title,
+      // which is how these adverts are written ("Volvo XC 60 ...").
+      make: searchedMake ?? firstWordAsMake(offer.title),
       model: params.get('model')?.label?.trim() ?? null,
       generation: null,
       version: null,
@@ -407,6 +420,30 @@ function setEnumList(
 function lookup<T>(dictionary: Record<string, T>, key: unknown): T | null {
   if (typeof key !== 'string' || !key) return null;
   return dictionary[key] ?? null;
+}
+
+/** Multi-word makes have to be recognised before the single-word fallback. */
+const TWO_WORD_MAKES = [
+  'alfa romeo',
+  'aston martin',
+  'land rover',
+  'mercedes benz',
+  'great wall',
+];
+
+function firstWordAsMake(title: string | undefined): string | null {
+  if (!title) return null;
+  const cleaned = title.trim().toLowerCase();
+
+  for (const make of TWO_WORD_MAKES) {
+    if (cleaned.startsWith(make)) {
+      return make.replace(/\b\p{Ll}/gu, (c) => c.toUpperCase());
+    }
+  }
+
+  const [first] = title.trim().split(/\s+/);
+  if (!first || first.length < 2) return null;
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }
 
 function toInt(value: unknown): number | null {

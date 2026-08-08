@@ -63,7 +63,7 @@ export function MapPicker({
               <Circle
                 center={[point.lat, point.lon]}
                 radius={radiusKm * 1000}
-                pathOptions={{ color: '#2563eb', fillOpacity: 0.1 }}
+                pathOptions={{ color: '#007d7e', fillOpacity: 0.1 }}
               />
             ) : null}
           </>

@@ -68,6 +68,8 @@ export const listingQuerySchema = paginationSchema.extend({
   onlyFavorites: z.coerce.boolean().optional(),
   onlyNew: z.coerce.boolean().optional(),
   includeInactive: z.coerce.boolean().default(false),
+  /** "no" hides sold cars, "yes" shows only them, "all" ignores the flag. */
+  archived: z.enum(['no', 'yes', 'all']).default('no'),
   sort: z.enum(listingSortValues).default('newest'),
 });
 

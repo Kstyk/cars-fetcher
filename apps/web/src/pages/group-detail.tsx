@@ -38,7 +38,20 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/misc';
-import { formatDateTime, formatRelative } from '@/lib/format';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  PROVIDER_COLORS,
+  PROVIDER_LABELS,
+  formatDateTime,
+  formatRelative,
+  label,
+} from '@/lib/format';
 import {
   useAddFilter,
   useDeleteFilter,
@@ -53,7 +66,12 @@ export function GroupDetailPage() {
   // Route ids are prefixed by the pathless `protected-layout` route.
   const { groupId } = useParams({ from: '/protected-layout/groups/$groupId' });
   const group = useFilterGroup(groupId);
-  const runs = useGroupRuns(groupId);
+  const [runsLimit, setRunsLimit] = useState(50);
+  const [runsTrigger, setRunsTrigger] = useState<'all' | 'manual' | 'scheduler'>('all');
+  const runs = useGroupRuns(groupId, runsLimit);
+  const visibleRuns = (runs.data ?? []).filter(
+    (run) => runsTrigger === 'all' || run.trigger === runsTrigger,
+  );
   const listings = useListings({ groupId, pageSize: 12, sort: 'newest' });
   const fetchGroup = useFetchGroup();
   const deleteFilter = useDeleteFilter(groupId);
@@ -248,28 +266,65 @@ export function GroupDetailPage() {
 
         <TabsContent value="runs" className="pt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle className="text-base">Ostatnie pobrania</CardTitle>
+              <Select
+                value={runsTrigger}
+                onValueChange={(v) => setRunsTrigger(v as typeof runsTrigger)}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Wszystkie</SelectItem>
+                  <SelectItem value="manual">Ręczne</SelectItem>
+                  <SelectItem value="scheduler">Harmonogram</SelectItem>
+                </SelectContent>
+              </Select>
             </CardHeader>
             <CardContent className="pt-0">
-              {runs.data && runs.data.length > 0 ? (
+              {visibleRuns.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-muted-foreground text-left text-xs">
                       <tr className="border-b">
                         <th className="py-2 pr-4 font-medium">Start</th>
+                        <th className="py-2 pr-4 font-medium">Filtr</th>
+                        <th className="py-2 pr-4 font-medium">Serwis</th>
                         <th className="py-2 pr-4 font-medium">Status</th>
-                        <th className="py-2 pr-4 font-medium">Źródło</th>
+                        <th className="py-2 pr-4 font-medium">Wyzwalacz</th>
                         <th className="py-2 pr-4 text-right font-medium">Znalezione</th>
                         <th className="py-2 pr-4 text-right font-medium">Nowe</th>
                         <th className="py-2 text-right font-medium">Czas</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {runs.data.map((run) => (
+                      {visibleRuns.map((run) => (
                         <tr key={run.id} className="border-b last:border-0">
-                          <td className="py-2 pr-4 whitespace-nowrap">
+                          <td className="data-figure py-2 pr-4 whitespace-nowrap">
                             {formatDateTime(run.startedAt)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {run.filterName ??
+                              [run.filterMake, run.filterModel]
+                                .filter(Boolean)
+                                .join(' ') ??
+                              '—'}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {run.filterProvider ? (
+                              <Badge
+                                className="border-transparent text-white"
+                                style={{
+                                  backgroundColor:
+                                    PROVIDER_COLORS[run.filterProvider] ?? '#475569',
+                                }}
+                              >
+                                {label(PROVIDER_LABELS, run.filterProvider)}
+                              </Badge>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="py-2 pr-4">
                             <Badge
@@ -280,20 +335,22 @@ export function GroupDetailPage() {
                                     ? 'destructive'
                                     : 'secondary'
                               }
+                              // Failed runs record why; surface it on hover.
+                              title={run.errorMessage ?? undefined}
                             >
                               {run.status}
                             </Badge>
                           </td>
                           <td className="text-muted-foreground py-2 pr-4">
-                            {run.trigger}
+                            {run.trigger === 'scheduler' ? 'Harmonogram' : run.trigger === 'manual' ? 'Ręczne' : run.trigger}
                           </td>
-                          <td className="tabular py-2 pr-4 text-right">
+                          <td className="data-figure py-2 pr-4 text-right">
                             {run.itemsSeen}
                           </td>
-                          <td className="tabular py-2 pr-4 text-right">
+                          <td className="data-figure py-2 pr-4 text-right">
                             {run.itemsNew}
                           </td>
-                          <td className="tabular text-muted-foreground py-2 text-right">
+                          <td className="data-figure text-muted-foreground py-2 text-right">
                             {run.durationMs ? `${(run.durationMs / 1000).toFixed(1)} s` : '—'}
                           </td>
                         </tr>
@@ -303,9 +360,22 @@ export function GroupDetailPage() {
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  Brak historii — uruchom pobieranie.
+                  {runs.data && runs.data.length > 0
+                    ? 'Brak pobrań tego typu w widocznym zakresie.'
+                    : 'Brak historii — uruchom pobieranie.'}
                 </p>
               )}
+              {runs.data && runs.data.length >= runsLimit && runsLimit < 100 ? (
+                <div className="pt-3 text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRunsLimit((n) => Math.min(n + 50, 100))}
+                  >
+                    Załaduj więcej
+                  </Button>
+                </div>
+              ) : null}
               <p className="text-muted-foreground mt-4 text-xs">
                 Ostatnie pobranie: {formatRelative(group.data.lastFetchedAt)}
               </p>

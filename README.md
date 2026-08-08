@@ -16,7 +16,55 @@ Szczegóły nie są duplikowane: karta oferty linkuje **bezpośrednio do serwisu
 | Frontend      | React 19, TypeScript, Vite 7, Tailwind CSS v4, shadcn/ui             |
 | Dane w UI     | TanStack Query v5, TanStack Router v1                                |
 
-## Szybki start
+### Styl: „terminal rynkowy"
+
+Nie kolejny szablonowy SaaS-blue. Appka to obserwator rynku, nie katalog —
+paleta i typografia to odzwierciedlają:
+
+- **Kolor** — tokeny w [styles.css](apps/web/src/styles.css) przesunięte z
+  niebiesko-szarego (hue ~255-265) na zielony terminal (hue ~150-195). Jasny
+  motyw: "wydruk z tickera" (papier + teal). Ciemny: przydymiona zieleń CRT —
+  natywny tryb tego kierunku.
+- **Typografia** — Space Grotesk samohostowany (`public/fonts/`, ~44 KB, zero
+  CDN w runtime) na nagłówkach i wordmarku. Każda cena/przebieg/moc/data —
+  klasa `.data-figure` (monospace tabular) — czyta się jak odczyt z terminala,
+  nie jak zwykły tekst.
+- **Sygnatura** — cena na karcie ma wbudowaną strzałkę trendu (↓/↑) zamiast
+  osobnego badge'a. Semantyka jak dla kupującego, nie inwestora: spadek =
+  zielony (dobrze dla Ciebie), wzrost = czerwony — spójne w karcie, dialogu
+  historii cen i porównywarce.
+
+## Szybki start (Docker)
+
+Cała aplikacja w kontenerach — baza, API i frontend:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Aplikacja: **http://localhost:8090**  ·  Adminer: http://localhost:8080
+
+Migracje wykonują się automatycznie przy starcie kontenera API (entrypoint
+czeka na bazę, potem uruchamia `drizzle` — już zastosowane są pomijane).
+Dane demo wgrasz raz przez `docker compose exec api node apps/api/dist/db/seed.js`.
+
+| Usługa | Port | Uwagi |
+| ------ | ---- | ----- |
+| web (nginx) | 8090 | serwuje SPA i proxy'uje `/api` do kontenera API |
+| api | 4000 | wystawiony do debugowania; przeglądarka go nie potrzebuje |
+| postgres | 5433 | |
+| adminer | 8080 | |
+
+### Automatyczna aktualizacja obrazów
+
+Hook `Stop` w [.claude/settings.json](.claude/settings.json) uruchamia
+[scripts/docker-deploy.sh](scripts/docker-deploy.sh) po każdym zakończonym
+promptcie. Skrypt porównuje czasy modyfikacji źródeł ze znacznikiem z ostatniego
+wdrożenia i przebudowuje obrazy tylko wtedy, gdy coś się zmieniło — bez zmian
+kończy się w ~0,15 s. Log ostatniej przebudowy: `docker-deploy.log`.
+
+## Szybki start (bez Dockera)
 
 ```bash
 # 1. Konfiguracja
@@ -241,20 +289,43 @@ precyzyjnie. Wyniki i tak przechodzą filtrowanie po stronie aplikacji.
 `drive` i `vin`, których wyszukiwarka Otomoto nie podaje. Ten sam
 `NormalizedListing` obsługuje oba źródła — pola po prostu bywają puste.
 
-### Uwaga na klienta HTTP
+### CloudFront blokuje wszystko poza prawdziwą przeglądarką
 
-OLX stoi za CloudFrontem, który odrzuca `curl` z 403 (odcisk TLS), ale
-przepuszcza `fetch` Node'a. `ScrapingClient` używa globalnego `fetch`, więc
-działa. Debugując z terminala, nie sugeruj się `curl` — użyj Node'a.
+OLX stoi za CloudFront/WAF, który odrzuca **każdego** klienta bez realnego
+odcisku TLS/HTTP2 przeglądarki — `curl`, Node `fetch`, identyczne nagłówki
+UA, nic nie pomaga. Blokowany jest nawet `robots.txt`, więc to nie
+wykrywanie zachowania konkretnego żądania, tylko twardy filtr na poziomie
+połączenia. Realna przeglądarka z tego samego IP przechodzi bez problemu.
+
+Dlatego `olx.source.ts` woła `fetchHtml(url, { useBrowser: true })` —
+[`browser-fetch.ts`](apps/api/src/providers/scraping/browser-fetch.ts) odpala
+jeden, długo żyjący headless Chromium (Playwright) na cały proces i faktycznie
+nawiguje na URL API, zamiast robić gołe zapytanie HTTP. Wolniejsze
+(~1-6 s/stronę zamiast ~0.1 s), ale przechodzi. Inne adaptery (Otomoto,
+autoplac, FindCar) nie mają tego problemu i zostają na zwykłym `fetch`.
+
+Efekt uboczny: obraz Dockera `api` jest teraz ~1.9 GB (Chromium + zależności
+systemowe), a `Dockerfile` bazuje na `node:22-slim` (Debian) zamiast
+`alpine` — Playwright nie wspiera musl/Alpine.
+
+**Przełącznik (circuit breaker):** po 3 kolejnych 403 z jednego hosta,
+`ScrapingClient` przestaje go odpytywać na 3h (`CIRCUIT_COOLDOWN_MS` w
+[`http-client.ts`](apps/api/src/providers/scraping/http-client.ts)) — regularne
+bicie w zablokowany host co 15-30 min samo w sobie wygląda jak bot i
+podtrzymuje blokadę. Widać to w historii pobrań jako natychmiastowy `failed`
+z komunikatem „wstrzymano próby do…”.
 
 ## Serwisy
 
 | Serwis        | Status              | Źródło danych                    |
 | ------------- | ------------------- | -------------------------------- |
 | Otomoto       | działa              | publiczne strony ofert / API partnerskie |
-| OLX           | działa              | `/api/v1/offers/` (dozwolone w robots.txt) |
+| OLX           | działa (przez headless Chromium) | `/api/v1/offers/` (dozwolone w robots.txt) |
 | autoplac.pl   | działa              | Angular TransferState na stronach `/oferty/` |
-| FindCar       | **niezaimplementowane** | —                            |
+| FindCar       | działa              | —                            |
+| Sprzedajemy.pl | działa             | klasyczny SSR HTML, `/motoryzacja/samochody-osobowe/...` |
+| mobile.de     | **niezaimplementowane** | JS-rendered (Next.js RSC) - wymaga Chromium + rozkminy ich API |
+| AutoScout24   | **zablokowane celowo** | `robots.txt`: `Disallow: /lst?` dla wszystkich botów |
 
 ### autoplac.pl
 
@@ -289,10 +360,32 @@ Uwagi o danych: moc podawana w kW (przeliczam na KM), `insertTime` to epoch w
 milisekundach, a payload listy nie zawiera flagi prywatny/dealer — dlatego
 `sellerType` to `unknown`.
 
+### Sprzedajemy.pl
+
+Ogólny serwis ogłoszeniowy, nie automotive-specific — klasyczny SSR HTML
+(żadnego `__NEXT_DATA__`/Apollo state), parsowany przez `cheerio`. Marka i
+model to segmenty ścieżki (`/motoryzacja/samochody-osobowe/audi/a4`), które
+pokrywają się ze wspólnym `slugify()` na tyle dobrze, że nie trzeba osobnego
+pliku taksonomii.
+
+`robots.txt` ma `Disallow: *inp_*` — a `inp_*` to dokładnie prefiks *każdego*
+parametru filtra i sortowania w ich panelu „Pokaż wszystkie filtry”
+(`inp_price`, `inp_attribute_466` dla rocznika, nawet `sort=inp_srt_date_d`).
+Odkryte to zostało boleśnie — pierwsza wersja adaptera kopiowała nazwy pól
+formularza wprost i dostawała ciche odrzucenie na poziomie `RobotsChecker`.
+Efekt: ten adapter woła wyłącznie `{ścieżka}?offset=N`, nic więcej. Cena,
+rocznik, przebieg, paliwo i typ sprzedawcy są filtrowane po naszej stronie
+(`matchesCriteria`) na podstawie tego, co karta wyniku faktycznie pokazuje —
+nadwozie, kolor, drzwi, przebieg wypadku i VAT nie są tam widoczne, więc dla
+tego serwisu po prostu nie da się ich filtrować. Sortowanie też jest
+`inp_srt_*`, więc strony wracają w domyślnej kolejności serwisu
+(„Polecane”), nie od najnowszych — realne ograniczenie, nie błąd.
+
 `GET /api/providers` zwraca ten stan; UI wyszarza serwisy bez adaptera i
 oznacza je jako „wkrótce". Filtr przypisany do niezaimplementowanego serwisu
 kończy przebieg statusem `failed` z czytelnym powodem, zamiast po cichu nie
-zwracać nic.
+zwracać nic. AutoScout24 nie doczeka się adaptera w ogóle — ich `robots.txt`
+blokuje `/lst?` (endpoint wyszukiwania) dla wszystkich botów.
 
 Dodanie kolejnego serwisu to jedna implementacja
 [`ListingSource`](apps/api/src/providers/types.ts) plus wpis w
@@ -339,6 +432,10 @@ Nakładające się przebiegi crona są pomijane, nie kolejkowane.
 | `GET`    | `/api/auth/me`                            | profil                                  |
 | `PATCH`  | `/api/auth/me`                            | zmiana imienia/nazwiska                 |
 | `POST`   | `/api/auth/change-password`               | zmiana hasła (unieważnia sesje)         |
+| `GET`    | `/api/auth/providers`                     | czy logowanie Google jest skonfigurowane |
+| `GET`    | `/api/auth/google` `/google/callback`     | logowanie Google (redirect, nie JSON)   |
+| `POST`   | `/api/auth/verify-email`                  | potwierdzenie e-maila tokenem z linku   |
+| `POST`   | `/api/auth/resend-verification`           | ponowna wysyłka linku (cooldown 60s)    |
 | `GET`    | `/api/filter-groups`                      | grupy + statystyki + ostatni przebieg   |
 | `POST`   | `/api/filter-groups`                      | nowa grupa (opcjonalnie z filtrami)     |
 | `PATCH`  | `/api/filter-groups/:id`                  | edycja grupy                            |
@@ -365,10 +462,140 @@ Nakładające się przebiegi crona są pomijane, nie kolejkowane.
 | `GET`    | `/api/taxonomy/makes/:make/models`        | modele danej marki                      |
 | `GET`    | `/api/providers`                          | status źródeł danych                    |
 
+## Porównywarka, historia cen i wskaźnik dobrej ceny
+
+- **Porównywarka** — checkbox na karcie (max 3 na raz), pływająca taca na
+  dole ekranu, dialog z tabelą side-by-side (cena/przebieg/rocznik/moc,
+  najlepsza wartość podświetlona). Stan żyje nad routerem
+  ([`lib/compare.tsx`](apps/web/src/lib/compare.tsx)), więc przeżywa
+  nawigację między `/listings` i `/favorites`.
+- **Historia ceny** — `listing_price_history` dostaje wiersz przy każdej
+  zmianie ceny (patrz `ingest.service.ts`), łącznie z pierwszym zapisem.
+  Ikona na karcie otwiera dialog z prostym wykresem SVG (bez biblioteki do
+  wykresów) — [`price-history-chart.tsx`](apps/web/src/components/price-history-chart.tsx):
+  linia + wash pod spodem, punkty ekstremalne podpisane, krzyżyk + tooltip
+  pod kursorem, tabela z dokładnymi wartościami pod spodem. Ofertę bez zmian
+  ceny dialog pokazuje jako płaski komunikat zamiast bezsensownego
+  jednopunktowego wykresu.
+- **Wskaźnik dobrej ceny** — zielona odznaka „X% poniżej rynku” na karcie.
+  Jedno skorelowane podzapytanie SQL na wiersz ([`listings.service.ts`](apps/api/src/modules/listings/listings.service.ts))
+  liczy medianę (`percentile_cont`) cen ofert tej samej marki+modelu, ±1 rok
+  produkcji, ±30% przebiegu, wykluczając samą ofertę. Odznaka pokazuje się
+  dopiero przy ≥5 porównywalnych ofertach (mniej = szum, nie sygnał) i ≥10%
+  poniżej mediany. Indeks `listings_market_cohort_idx` (make, model, year,
+  mileage_km) trzyma to szybkie.
+
+## Powiadomienia e-mail i push
+
+Dzwonek w nagłówku był jedynym kanałem — `notify()` wstawiał wiersz do bazy i
+na tym się kończyło (`sent_at` zawsze `NULL`, 0 subskrypcji push). Teraz
+`notify()` po zapisaniu w bazie **wysyła** e-mail i/lub push, zależnie od
+ustawień użytkownika (`emailEnabled` / `pushEnabled` + przełącznik per typ
+zdarzenia w `notification_preferences`).
+
+### Web Push (VAPID)
+
+```bash
+npm run push:generate-keys --workspace @cars-fetcher/api
+```
+
+Wynik wklej do `.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`VAPID_SUBJECT`) i do `docker-compose.yml`/środowiska kontenera — klucze są
+tam przekazywane jawnie, `env_file` nie jest używane.
+
+Przepływ: przeglądarka rejestruje `apps/web/public/sw.js`
+([`lib/push.ts`](apps/web/src/lib/push.ts)), pyta o zgodę, subskrybuje przez
+`PushManager` z kluczem publicznym pobranym z
+`GET /api/notifications/push/vapid-public-key` (publiczny endpoint, klucz
+prywatny nigdy nie opuszcza serwera), potem rejestruje subskrypcję pod
+`POST /api/notifications/push/subscribe`. Przełącznik „Push w przeglądarce”
+w profilu wykonuje ten cały przepływ, nie tylko zapisuje flagę w bazie.
+
+Wygasłe subskrypcje (przeglądarka odinstalowana, zgoda cofnięta) serwis push
+zgłasza jako 404/410 — [`push.service.ts`](apps/api/src/modules/notifications/push.service.ts)
+usuwa taki wiersz zamiast próbować bez końca.
+
+### E-mail (SMTP)
+
+Dowolny serwer SMTP przez `nodemailer` — `SMTP_HOST/PORT/USER/PASS/FROM` w
+`.env`. Puste `SMTP_HOST` = wysyłka pomijana z jednym ostrzeżeniem w logu,
+reszta aplikacji działa normalnie (ten sam wzorzec co brak poświadczeń
+Otomoto). Szablon w
+[`email.service.ts`](apps/api/src/modules/notifications/email.service.ts) —
+inline style, bo klienty pocztowe wycinają `<style>`.
+
+### Śledzenie dostawy
+
+Kolumny `email_sent_at` / `email_error` / `push_sent_at` / `push_error` na
+`notifications` — `NULL` w obu znaczy „kanał wyłączony, nic nie próbowano”,
+nie „się nie udało”. Błąd wysyłki nigdy nie przerywa przebiegu pobierania:
+[`dispatch.service.ts`](apps/api/src/modules/notifications/dispatch.service.ts)
+łapie wyjątki i zapisuje je na wierszu zamiast rzucać dalej.
+
+### Godziny ciszy
+
+`quiet_hours_start/end` w preferencjach wstrzymuje **wysyłkę** e-mail/push
+(wiersz w dzwonku i tak powstaje) — sam to złapałem podczas testu o 22:43
+czasu warszawskiego, gdzie `emailSentAt` zostawało `NULL` mimo poprawnej
+konfiguracji SMTP. To zamierzone działanie, nie błąd.
+
+## Logowanie Google i weryfikacja e-maila
+
+Rejestracja/logowanie hasłem to nie jedyna droga — jest też logowanie przez
+Google (OAuth2, bez zewnętrznego SDK, tylko `fetch` — ten sam styl co klient
+Otomoto) i weryfikacja adresu e-mail. 2FA świadomie pominięte.
+
+### Google OAuth2
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
+   utwórz OAuth Client ID (typ „Web application”).
+2. Authorised redirect URI musi być dokładnie
+   `${APP_URL}/api/auth/google/callback` (domyślnie
+   `http://localhost:8090/api/auth/google/callback`).
+3. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` w `.env` i
+   `docker-compose.yml` (jak zawsze — przekazywane jawnie, `env_file` nie
+   jest używane).
+
+Puste zmienne = przycisk „Zaloguj przez Google” **ukryty** (frontend pyta
+`GET /api/auth/providers` przy montowaniu strony logowania), reszta apki
+działa normalnie — ten sam wzorzec co Otomoto/SMTP/VAPID.
+
+Przepływ: `GET /api/auth/google` ustawia `state` w krótkotrwałym `httpOnly`
+cookie i przekierowuje na ekran zgody Google → `GET /api/auth/google/callback`
+porównuje `state` (ochrona CSRF), wymienia kod na token, pobiera profil z
+`userinfo` endpointu (bez lokalnej weryfikacji JWKS — prościej, wystarcza do
+jednorazowego logowania), ustawia refresh cookie i **zwykłym HTTP redirectem**
+wraca na `APP_URL`. Brak dedykowanej strony callbacku po stronie frontu —
+`AuthProvider` i tak odpytuje `/api/auth/me` przy starcie, dostanie 401,
+odpali już istniejący mechanizm auto-refresh i sesja się sama złoży.
+
+Konto: e-mail z Google pasujący do istniejącego konta hasłowego → `googleId`
+dopisywany do tego wiersza (linkowanie), nie tworzy duplikatu. Nowy e-mail →
+nowe konto bez hasła (`password_hash IS NULL`), od razu oznaczone jako
+zweryfikowane (Google już to potwierdził). Stąd `hasPassword` w odpowiedzi
+`/api/auth/me` — front chowa nim formularz zmiany hasła dla kont
+Google-only.
+
+### Weryfikacja e-mail
+
+Token: `crypto.randomBytes(48)`, w bazie tylko SHA-256 (ten sam prymityw co
+refresh token, `generateOpaqueToken`/`hashOpaqueToken`). Ważny 24h, wysyłka
+best-effort — martwy SMTP nie blokuje rejestracji, tylko loguje ostrzeżenie
+(spójnie z resztą apki). Link z e-maila:
+`${APP_URL}/verify-email?token=...` → publiczna strona frontu, działa
+niezależnie od tego, czy przeglądarka ma aktywną sesję.
+
+**Niezweryfikowany e-mail nie blokuje korzystania z appki** — świadoma
+decyzja, żeby nie zamykać ludzi za drzwiami, gdy SMTP akurat nie jest
+skonfigurowane (świeże środowisko deweloperskie). W profilu widać banner z
+przyciskiem „Wyślij ponownie” (`POST /api/auth/resend-verification`,
+cooldown 60s, `409` przy zbyt częstym klikaniu).
+
 ## Bezpieczeństwo
 
 - Hasła: bcrypt, 12 rund. Logowanie porównuje hash także dla nieistniejącego
-  konta, więc czas odpowiedzi nie zdradza, czy adres jest zarejestrowany.
+  konta i dla konta bez hasła (Google-only), więc czas odpowiedzi nie zdradza,
+  czy adres jest zarejestrowany ani jak założono konto.
 - Access token: JWT (domyślnie 15 min) w nagłówku `Authorization`.
 - Refresh token: losowy, opaque, w bazie tylko jako SHA-256, w przeglądarce jako
   `httpOnly` cookie ograniczone do `/api/auth`. Rotowany przy każdym użyciu.
@@ -401,7 +628,9 @@ W workspace `@cars-fetcher/api`:
 
 ## Co dalej
 
-- Dostawcy: OLX, mobile.de, AutoScout24 — implementacja `ListingSource`.
-- Faktyczna wysyłka e-maili i web-push (tabele i uprawnienia już są).
-- Wykres historii cen na karcie oferty.
+- mobile.de — wymaga headless Chromium (jak OLX) + rozkminy ich wewnętrznego
+  API, JS-rendered wyniki. AutoScout24 odrzucony na stałe (`robots.txt`).
 - Testy: Vitest + Testcontainers dla warstwy repozytoriów.
+- 2FA świadomie pominięte (patrz [„Logowanie Google i weryfikacja
+  e-maila”](#logowanie-google-i-weryfikacja-e-maila)) — dorzucić jeśli
+  będzie potrzeba.

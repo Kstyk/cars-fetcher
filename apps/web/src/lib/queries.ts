@@ -11,6 +11,7 @@ import type {
   FilterGroup,
   GroupRunResult,
   Listing,
+  ListingDetail,
   ListingStats,
   Notification,
   NotificationPreferences,
@@ -23,7 +24,7 @@ import type {
 export const queryKeys = {
   groups: ['filter-groups'] as const,
   group: (id: string) => ['filter-groups', id] as const,
-  groupRuns: (id: string) => ['filter-groups', id, 'runs'] as const,
+  groupRuns: (id: string, limit: number) => ['filter-groups', id, 'runs', limit] as const,
   listings: (params: Record<string, unknown>) => ['listings', params] as const,
   listing: (id: string) => ['listings', id] as const,
   stats: ['listings', 'stats'] as const,
@@ -75,10 +76,10 @@ export function useFilterGroup(id: string, options?: { enabled?: boolean }) {
   });
 }
 
-export function useGroupRuns(id: string) {
+export function useGroupRuns(id: string, limit = 50) {
   return useQuery({
-    queryKey: queryKeys.groupRuns(id),
-    queryFn: () => api.get<FetchRun[]>(`/api/filter-groups/${id}/runs`),
+    queryKey: queryKeys.groupRuns(id, limit),
+    queryFn: () => api.get<FetchRun[]>(`/api/filter-groups/${id}/runs`, { limit }),
   });
 }
 
@@ -160,7 +161,8 @@ export function useFetchGroup() {
     onSuccess: (_result, groupId) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
       void queryClient.invalidateQueries({ queryKey: queryKeys.group(groupId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.groupRuns(groupId) });
+      // Partial key - matches useGroupRuns regardless of its `limit`.
+      void queryClient.invalidateQueries({ queryKey: ['filter-groups', groupId, 'runs'] });
       void queryClient.invalidateQueries({ queryKey: ['listings'] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -178,6 +180,15 @@ export function useListings(
     queryFn: () => api.get<Paginated<Listing>>('/api/listings', params),
     placeholderData: (previous) => previous,
     ...options,
+  });
+}
+
+/** Fetched lazily - only once a card's price-history dialog is actually opened. */
+export function useListingDetail(id: string, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.listing(id),
+    queryFn: () => api.get<ListingDetail>(`/api/listings/${id}`),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -221,10 +232,14 @@ export function useToggleFavorite() {
 
 /* ------------------------------ Notifications ----------------------------- */
 
-export function useNotifications(params: Record<string, unknown> = {}) {
+export function useNotifications(
+  params: Record<string, unknown> = {},
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: queryKeys.notifications(params),
     queryFn: () => api.get<Paginated<Notification>>('/api/notifications', params),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -291,5 +306,11 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (input: { currentPassword: string; newPassword: string }) =>
       api.post<void>('/api/auth/change-password', input),
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => api.post<void>('/api/auth/resend-verification'),
   });
 }

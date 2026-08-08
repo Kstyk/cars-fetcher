@@ -19,6 +19,64 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      # Root context: npm workspaces need the shared lockfile.
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: cars-fetcher-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      # `postgres` is the compose service name, reachable on the default network.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cars}:${POSTGRES_PASSWORD:-cars}@postgres:5432/${POSTGRES_DB:-cars_fetcher}
+      # nginx serves the browser, so requests reach the API same-origin.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8090}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
+      OTOMOTO_SOURCE: ${OTOMOTO_SOURCE:-scraper}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
+      SCHEDULER_CRON: ${SCHEDULER_CRON:-*/30 * * * *}
+      FETCH_MAX_PAGES: ${FETCH_MAX_PAGES:-5}
+      SCRAPER_MIN_DELAY_MS: ${SCRAPER_MIN_DELAY_MS:-2500}
+      SCRAPER_RESPECT_ROBOTS: ${SCRAPER_RESPECT_ROBOTS:-true}
+      SCRAPER_MIN_PRICE_PLN: ${SCRAPER_MIN_PRICE_PLN:-2000}
+      # Base URL baked into e-mail/push deep links - must be where the
+      # browser actually reaches the app, not the internal API port.
+      APP_URL: ${APP_URL:-http://localhost:8090}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Cars Fetcher <no-reply@cars-fetcher.local>}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      # Exposed for debugging; the browser goes through nginx on 8090.
+      - "${API_PORT:-4000}:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: cars-fetcher-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8090}:80"
+
   adminer:
     image: adminer:5
     container_name: cars-fetcher-adminer

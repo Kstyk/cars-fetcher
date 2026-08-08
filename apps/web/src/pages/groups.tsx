@@ -224,7 +224,8 @@ function CreateGroupDialog({
   const [form, setForm] = useState({
     name: '',
     description: '',
-    color: '#2563eb',
+    // Seeds the <input type="color"> with the app's own primary teal.
+    color: '#007d7e',
     refreshIntervalMinutes: 60,
     notifyOnNew: true,
     makes: [] as string[],

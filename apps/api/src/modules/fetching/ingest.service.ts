@@ -240,9 +240,17 @@ export async function deactivateStaleListings(
   filterId: string,
   runStartedAt: Date,
 ): Promise<number> {
+  const now = new Date();
   const result = await db
     .update(listings)
-    .set({ isActive: false, deactivatedAt: new Date() })
+    // Archiving is one-way: a listing that comes back stays flagged as having
+    // been sold once, which is what the sold-vs-listed ratio counts.
+    .set({
+      isActive: false,
+      deactivatedAt: now,
+      isArchived: true,
+      archivedAt: sql`coalesce(${listings.archivedAt}, ${now})`,
+    })
     .where(
       and(
         eq(listings.isActive, true),
