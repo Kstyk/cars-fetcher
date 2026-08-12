@@ -7,11 +7,16 @@
           {
             "type": "command",
             "command": "bash scripts/docker-deploy.sh",
-            "statusMessage": "Aktualizuję obrazy Dockera…",
-            "timeout": 600
+            "timeout": 600,
+            "statusMessage": "Aktualizuję obrazy Dockera…"
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)"
     ]
   }
 }

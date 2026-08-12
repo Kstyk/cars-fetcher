@@ -34,8 +34,9 @@ services:
       PORT: 4000
       # `postgres` is the compose service name, reachable on the default network.
       DATABASE_URL: postgresql://${POSTGRES_USER:-cars}:${POSTGRES_PASSWORD:-cars}@postgres:5432/${POSTGRES_DB:-cars_fetcher}
-      # nginx serves the browser, so requests reach the API same-origin.
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8090}
+      # nginx serves the browser, so requests reach the API same-origin - this
+      # only matters if something ever calls the API directly, cross-origin.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8090,http://cars-fetcher.pl,http://cars-fetcher.pl:8090}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
@@ -76,6 +77,9 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8090}:80"
+      # Bare port 80 too, so a LAN-only hostname (see README) works without a
+      # port suffix - http://cars-fetcher.pl instead of http://cars-fetcher.pl:8090.
+      - "${WEB_PORT_80:-80}:80"
 
   adminer:
     image: adminer:5

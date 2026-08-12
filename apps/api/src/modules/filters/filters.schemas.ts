@@ -134,6 +134,10 @@ export const createGroupSchema = z.object({
 
 export const updateGroupSchema = createGroupSchema.partial().omit({ filters: true });
 
+export const mergeGroupsSchema = z.object({
+  sourceGroupIds: z.array(z.string().uuid()).min(1).max(20),
+});
+
 export const groupIdParam = z.object({ id: z.string().uuid() });
 export const filterIdParam = z.object({
   id: z.string().uuid(),

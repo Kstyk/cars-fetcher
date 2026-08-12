@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -453,6 +454,18 @@ export const listings = pgTable(
     isArchived: boolean('is_archived').notNull().default(false),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
 
+    /**
+     * Set when this row was matched, at ingest time, as the same car as an
+     * earlier listing from a *different* provider (same make/model/year and
+     * matching price+mileage, or the same dealer name - see
+     * `findDuplicateOf` in duplicates.service.ts). One-way like `isArchived`:
+     * once folded in, a row stays folded in even if it later stops matching.
+     * `searchListings` filters these out so only the primary card shows; its
+     * `duplicates` subquery lists the followers as alternate marketplace
+     * links on that one card.
+     */
+    mergedIntoId: uuid('merged_into_id'),
+
     /** Untouched provider payload - lets us backfill columns without refetching. */
     raw: jsonb('raw').$type<Record<string, unknown>>(),
 
@@ -478,6 +491,15 @@ export const listings = pgTable(
     // Backs the "good price" market-median comparison - same cohort lookup
     // every listings page load runs once per row.
     index('listings_market_cohort_idx').on(t.make, t.model, t.year, t.mileageKm),
+    // Self-reference (a row's duplicate primary is another row of the same
+    // table), so the FK is declared out-of-line rather than inline on the
+    // column - drizzle has no `AnyPgColumn` back-reference for that.
+    foreignKey({
+      columns: [t.mergedIntoId],
+      foreignColumns: [t.id],
+      name: 'listings_merged_into_id_fk',
+    }).onDelete('set null'),
+    index('listings_merged_into_idx').on(t.mergedIntoId),
   ],
 );
 
@@ -513,9 +535,15 @@ export const listingMatches = pgTable(
     listingId: uuid('listing_id')
       .notNull()
       .references(() => listings.id, { onDelete: 'cascade' }),
-    filterId: uuid('filter_id')
-      .notNull()
-      .references(() => filters.id, { onDelete: 'cascade' }),
+    /**
+     * Nullable, unlike every other FK on this row: deleting a *filter* should
+     * only mean "stop looking for more like this", not "un-find what it
+     * already found" - the group still owns the match, so `set null` here
+     * (instead of `cascade`) keeps the listing reachable through the group
+     * and the plain listings feed. Same graceful-degradation the `fetchRuns`
+     * history already relies on for a deleted filter (see its left join).
+     */
+    filterId: uuid('filter_id').references(() => filters.id, { onDelete: 'set null' }),
     groupId: uuid('group_id')
       .notNull()
       .references(() => filterGroups.id, { onDelete: 'cascade' }),
@@ -561,6 +589,31 @@ export const favorites = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.listingId] }),
     index('favorites_user_idx').on(t.userId, t.createdAt),
+  ],
+);
+
+/**
+ * One row per (user, listing) - clicking through to the marketplace again
+ * bumps `viewedAt` and `viewCount` rather than adding a new row, so "recently
+ * viewed" reads as a de-duplicated stack, newest look first.
+ */
+export const listingViews = pgTable(
+  'listing_views',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    listingId: uuid('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    viewCount: integer('view_count').notNull().default(1),
+    viewedAt: timestamp('viewed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.listingId] }),
+    index('listing_views_user_viewed_idx').on(t.userId, t.viewedAt),
   ],
 );
 
@@ -688,6 +741,124 @@ export const fetchRuns = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/*                          Vehicle knowledge base                            */
+/*                                                                            */
+/* Deliberately unrelated to `listings`: this is reference material about a  */
+/* make/model/generation in general (specs, known issues, reputation), not   */
+/* anything tied to one advert. A listing card may *link* to a matching      */
+/* entry by make+model+generation, but nothing here references `listings`.  */
+/* -------------------------------------------------------------------------- */
+
+export const vehicleSourceEnum = pgEnum('vehicle_source', ['manual', 'ai_generated']);
+export const vehicleIssueSeverityEnum = pgEnum('vehicle_issue_severity', [
+  'minor',
+  'moderate',
+  'serious',
+]);
+export const vehicleNoteKindEnum = pgEnum('vehicle_note_kind', [
+  'reputation',
+  'ownership_cost',
+  'buying_advice',
+]);
+
+/** One generation of one model - "Golf Mk7 (2012-2019)", not "Golf" in general. */
+export const vehicleModels = pgTable(
+  'vehicle_models',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    make: varchar('make', { length: 60 }).notNull(),
+    model: varchar('model', { length: 80 }).notNull(),
+    generation: varchar('generation', { length: 80 }).notNull(),
+    yearFrom: smallint('year_from'),
+    /** Null means still in production. */
+    yearTo: smallint('year_to'),
+    bodyTypes: bodyTypeEnum('body_types').array(),
+    /** Short "what this generation is" blurb - a paragraph, not the full story. */
+    summary: text('summary'),
+    /** Where this row's content came from - shown in the UI, never hidden. */
+    source: vehicleSourceEnum('source').notNull().default('manual'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('vehicle_models_unique').on(t.make, t.model, t.generation),
+    index('vehicle_models_make_idx').on(t.make),
+  ],
+);
+
+/** One engine/drivetrain option within a generation - "2.0 TDI 150 KM". */
+export const vehicleEngines = pgTable(
+  'vehicle_engines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    modelId: uuid('model_id')
+      .notNull()
+      .references(() => vehicleModels.id, { onDelete: 'cascade' }),
+    /** Manufacturer engine code where one is commonly known, e.g. "CAGA". */
+    engineCode: varchar('engine_code', { length: 40 }),
+    name: varchar('name', { length: 120 }).notNull(),
+    fuelType: fuelTypeEnum('fuel_type'),
+    displacementCm3: integer('displacement_cm3'),
+    powerHp: integer('power_hp'),
+    torqueNm: integer('torque_nm'),
+    gearbox: gearboxEnum('gearbox'),
+    driveType: driveTypeEnum('drive_type'),
+    acceleration0To100: numeric('acceleration_0_100', { precision: 4, scale: 1, mode: 'number' }),
+    topSpeedKmh: integer('top_speed_kmh'),
+    fuelConsumptionCombined: numeric('fuel_consumption_combined', {
+      precision: 4,
+      scale: 1,
+      mode: 'number',
+    }),
+    yearFrom: smallint('year_from'),
+    yearTo: smallint('year_to'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('vehicle_engines_model_idx').on(t.modelId)],
+);
+
+/** A known fault/weak point - of the whole generation, or one engine specifically. */
+export const vehicleKnownIssues = pgTable(
+  'vehicle_known_issues',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    modelId: uuid('model_id')
+      .notNull()
+      .references(() => vehicleModels.id, { onDelete: 'cascade' }),
+    engineId: uuid('engine_id').references(() => vehicleEngines.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 200 }).notNull(),
+    description: text('description').notNull(),
+    severity: vehicleIssueSeverityEnum('severity').notNull().default('moderate'),
+    /** Free text on purpose - "zwykle po 150-200 tys. km" reads better than a range column. */
+    mileageHint: varchar('mileage_hint', { length: 100 }),
+    source: vehicleSourceEnum('source').notNull().default('manual'),
+    sourceUrl: text('source_url'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('vehicle_known_issues_model_idx').on(t.modelId),
+    index('vehicle_known_issues_engine_idx').on(t.engineId),
+  ],
+);
+
+/** Freeform reputation/ownership-cost/buying-advice text for a generation. */
+export const vehicleNotes = pgTable(
+  'vehicle_notes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    modelId: uuid('model_id')
+      .notNull()
+      .references(() => vehicleModels.id, { onDelete: 'cascade' }),
+    kind: vehicleNoteKindEnum('kind').notNull(),
+    body: text('body').notNull(),
+    source: vehicleSourceEnum('source').notNull().default('manual'),
+    sourceUrl: text('source_url'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('vehicle_notes_model_idx').on(t.modelId)],
+);
+
+/* -------------------------------------------------------------------------- */
 /*                                  Relations                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -805,6 +976,32 @@ export const fetchRunsRelations = relations(fetchRuns, ({ one }) => ({
   }),
 }));
 
+export const vehicleModelsRelations = relations(vehicleModels, ({ many }) => ({
+  engines: many(vehicleEngines),
+  knownIssues: many(vehicleKnownIssues),
+  notes: many(vehicleNotes),
+}));
+
+export const vehicleEnginesRelations = relations(vehicleEngines, ({ one, many }) => ({
+  model: one(vehicleModels, { fields: [vehicleEngines.modelId], references: [vehicleModels.id] }),
+  knownIssues: many(vehicleKnownIssues),
+}));
+
+export const vehicleKnownIssuesRelations = relations(vehicleKnownIssues, ({ one }) => ({
+  model: one(vehicleModels, {
+    fields: [vehicleKnownIssues.modelId],
+    references: [vehicleModels.id],
+  }),
+  engine: one(vehicleEngines, {
+    fields: [vehicleKnownIssues.engineId],
+    references: [vehicleEngines.id],
+  }),
+}));
+
+export const vehicleNotesRelations = relations(vehicleNotes, ({ one }) => ({
+  model: one(vehicleModels, { fields: [vehicleNotes.modelId], references: [vehicleModels.id] }),
+}));
+
 /* -------------------------------------------------------------------------- */
 /*                                Inferred types                              */
 /* -------------------------------------------------------------------------- */
@@ -821,3 +1018,11 @@ export type ListingMatch = typeof listingMatches.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type FetchRun = typeof fetchRuns.$inferSelect;
 export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
+export type VehicleModel = typeof vehicleModels.$inferSelect;
+export type NewVehicleModel = typeof vehicleModels.$inferInsert;
+export type VehicleEngine = typeof vehicleEngines.$inferSelect;
+export type NewVehicleEngine = typeof vehicleEngines.$inferInsert;
+export type VehicleKnownIssue = typeof vehicleKnownIssues.$inferSelect;
+export type NewVehicleKnownIssue = typeof vehicleKnownIssues.$inferInsert;
+export type VehicleNote = typeof vehicleNotes.$inferSelect;
+export type NewVehicleNote = typeof vehicleNotes.$inferInsert;

@@ -2,6 +2,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import {
   ArrowLeftIcon,
   CopyIcon,
+  EraserIcon,
   Loader2Icon,
   PencilIcon,
   PlusIcon,
@@ -54,6 +55,7 @@ import {
 } from '@/lib/format';
 import {
   useAddFilter,
+  useCleanStaleMatches,
   useDeleteFilter,
   useFetchGroup,
   useFilterGroup,
@@ -75,6 +77,7 @@ export function GroupDetailPage() {
   const listings = useListings({ groupId, pageSize: 12, sort: 'newest' });
   const fetchGroup = useFetchGroup();
   const deleteFilter = useDeleteFilter(groupId);
+  const cleanMatches = useCleanStaleMatches(groupId);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState(false);
   // Seeds the filter dialog: blank, a copy of a row, or the row being edited.
@@ -143,7 +146,7 @@ export function GroupDetailPage() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setEditGroupOpen(true)}>
             <PencilIcon />
             Edytuj grupę
@@ -202,6 +205,40 @@ export function GroupDetailPage() {
         </TabsContent>
 
         <TabsContent value="filters" className="space-y-3 pt-6">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+            <p className="text-muted-foreground text-xs">
+              Edytowałeś kryteria albo usunąłeś cały filtr (np. Alfa Romeo) i nie chcesz
+              już widzieć jego dawnych trafień? Stare dopasowania zostają, dopóki ich nie
+              wyczyścisz - to nie kasuje ofert, tylko odpina te, które już nie pasują albo
+              zostały bez filtra.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={cleanMatches.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Usunąć z wyników oferty, które już nie spełniają kryteriów filtrów tej grupy - albo należały do filtra, którego już nie ma? Same ogłoszenia zostają w bazie (ulubione, historia cen) - znikają tylko z wyszukiwań tej grupy.',
+                  )
+                ) {
+                  cleanMatches.mutate(undefined, {
+                    onSuccess: ({ removed }) => {
+                      window.alert(
+                        removed > 0
+                          ? `Usunięto ${removed} nieaktualnych dopasowań.`
+                          : 'Wszystko aktualne - nic do usunięcia.',
+                      );
+                    },
+                  });
+                }
+              }}
+            >
+              <EraserIcon />
+              Wyczyść nieaktualne
+            </Button>
+          </div>
           {group.data.filters.map((filter) => (
             <Card key={filter.id}>
               <CardContent className="flex flex-wrap items-start justify-between gap-4 py-4">
@@ -242,7 +279,15 @@ export function GroupDetailPage() {
                     size="icon"
                     variant="ghost"
                     aria-label="Usuń filtr"
-                    onClick={() => deleteFilter.mutate(filter.id)}
+                    onClick={() => {
+                      const name =
+                        filter.name ??
+                        [filter.make, filter.model].filter(Boolean).join(' ') ??
+                        'ten filtr';
+                      if (window.confirm(`Usunąć filtr "${name}"?`)) {
+                        deleteFilter.mutate(filter.id);
+                      }
+                    }}
                   >
                     <Trash2Icon className="text-destructive" />
                   </Button>
@@ -438,11 +483,14 @@ function FilterDialog({
     event.preventDefault();
     setError(null);
     try {
-      const payload = toFilterPayload(form);
+      const payloads = toFilterPayload(form);
       if (editingId) {
-        await updateFilter.mutateAsync({ filterId: editingId, input: payload });
+        // One row being edited stays one row - `payloads` has exactly one
+        // entry here since editing never allows multiple providers.
+        await updateFilter.mutateAsync({ filterId: editingId, input: payloads[0] });
       } else {
-        await addFilter.mutateAsync(payload);
+        // Creating fans out: one filter per checked provider, same criteria.
+        await Promise.all(payloads.map((payload) => addFilter.mutateAsync(payload)));
       }
       onOpenChange(false);
     } catch (err) {
@@ -469,7 +517,7 @@ function FilterDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <FilterForm value={form} onChange={setForm} />
+          <FilterForm value={form} onChange={setForm} allowMultipleProviders={!editingId} />
 
           {error ? (
             <p className="text-destructive text-sm" role="alert">
@@ -483,7 +531,11 @@ function FilterDialog({
             </Button>
             <Button type="submit" disabled={pending}>
               {pending ? <Loader2Icon className="animate-spin" /> : null}
-              {editingId ? 'Zapisz zmiany' : 'Dodaj filtr'}
+              {editingId
+                ? 'Zapisz zmiany'
+                : form.providers.length > 1
+                  ? `Dodaj filtry (${form.providers.length})`
+                  : 'Dodaj filtr'}
             </Button>
           </DialogFooter>
         </form>

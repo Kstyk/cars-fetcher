@@ -75,6 +75,10 @@ export const listingQuerySchema = paginationSchema.extend({
 
 export const listingIdParam = z.object({ id: z.string().uuid() });
 
+export const recentlyViewedQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(60),
+});
+
 export const favoriteInputSchema = z.object({
   note: z.string().trim().max(2000).nullish(),
   rating: z.number().int().min(1).max(5).nullish(),

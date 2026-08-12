@@ -22,6 +22,7 @@ import {
   useMarkAllRead,
   useMarkRead,
   useNotifications,
+  useTrackListingView,
   useUnreadCount,
 } from '@/lib/queries';
 import type { Notification } from '@/lib/types';
@@ -47,6 +48,7 @@ export function NotificationBell() {
   const notifications = useNotifications({ pageSize: 8 }, { enabled: open });
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
+  const trackView = useTrackListingView();
 
   const items = notifications.data?.items ?? [];
   const count = unread?.count ?? 0;
@@ -165,6 +167,9 @@ export function NotificationBell() {
                               onClick={() => {
                                 if (!notification.readAt) {
                                   markRead.mutate([notification.id]);
+                                }
+                                if (notification.listingId) {
+                                  trackView.mutate(notification.listingId);
                                 }
                               }}
                             >

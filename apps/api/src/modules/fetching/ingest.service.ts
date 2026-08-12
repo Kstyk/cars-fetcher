@@ -10,6 +10,7 @@ import {
 import { normalizeVoivodeship } from '../../lib/regions.js';
 import type { NormalizedListing } from '../../providers/types.js';
 import { lookupCached } from '../geo/geocoding.service.js';
+import { findDuplicateOf } from './duplicates.service.js';
 
 export interface IngestContext {
   filterId: string;
@@ -106,9 +107,15 @@ async function ingestOne(
 
     const values = toListingRow(item, now, coordinates);
 
+    // Only worth checking the very first time a listing is seen - an already
+    // known row's merge decision is not revisited on later sightings, and
+    // `mergedIntoId` is left out of the update `set` below on purpose so this
+    // never overwrites one.
+    const mergedIntoId = existing ? null : await findDuplicateOf(tx, values);
+
     const [saved] = await tx
       .insert(listings)
-      .values(values)
+      .values({ ...values, mergedIntoId })
       .onConflictDoUpdate({
         target: [listings.provider, listings.externalId],
         set: {
@@ -173,7 +180,12 @@ async function ingestOne(
     return {
       listingId: saved.id,
       isNewListing: !existing,
-      isNewMatch,
+      // A listing folded into an existing one on its very first sighting is
+      // not "new" from the user's point of view - it is the same car whose
+      // primary already carried (or will carry) the new-listing notification.
+      // Without this, the same physical car would fire "Nowe ogłoszenie!"
+      // twice under two different marketplace URLs.
+      isNewMatch: isNewMatch && mergedIntoId === null,
       priceChange,
     };
   });

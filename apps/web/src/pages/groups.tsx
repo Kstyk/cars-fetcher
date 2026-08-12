@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import {
+  GitMergeIcon,
   ListFilterIcon,
   Loader2Icon,
   PencilIcon,
@@ -17,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -32,12 +34,14 @@ import { Switch } from '@/components/ui/switch';
 import { formatRelative } from '@/lib/format';
 import { EditGroupDialog } from '@/components/edit-group-dialog';
 import { MultiCombobox } from '@/components/ui/combobox';
+import { cn } from '@/lib/utils';
 import type { FilterGroup } from '@/lib/types';
 import {
   useCreateGroup,
   useDeleteGroup,
   useFetchGroup,
   useFilterGroups,
+  useMergeGroups,
   useTaxonomy,
 } from '@/lib/queries';
 
@@ -46,6 +50,7 @@ export function GroupsPage() {
   const fetchGroup = useFetchGroup();
   const deleteGroup = useDeleteGroup();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [editing, setEditing] = useState<FilterGroup | null>(null);
 
   return (
@@ -58,10 +63,18 @@ export function GroupsPage() {
             „Volvo + Toyota” osobno od „Mazda + Kia”.
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <PlusIcon />
-          Nowa grupa
-        </Button>
+        <div className="flex gap-2">
+          {groups.data && groups.data.length >= 2 ? (
+            <Button variant="outline" onClick={() => setMergeOpen(true)}>
+              <GitMergeIcon />
+              Scal grupy
+            </Button>
+          ) : null}
+          <Button onClick={() => setDialogOpen(true)}>
+            <PlusIcon />
+            Nowa grupa
+          </Button>
+        </div>
       </div>
 
       {groups.isLoading ? (
@@ -198,6 +211,12 @@ export function GroupsPage() {
       )}
 
       <CreateGroupDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+
+      <MergeGroupsDialog
+        groups={groups.data ?? []}
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+      />
 
       {editing ? (
         <EditGroupDialog
@@ -396,6 +415,148 @@ function CreateGroupDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Picks a target and one or more sources among the user's own groups. The
+ * sources' filters, matches and history move into the target; the source
+ * groups themselves are then gone - `useMergeGroups` explains what that does
+ * and doesn't touch.
+ */
+function MergeGroupsDialog({
+  groups,
+  open,
+  onOpenChange,
+}: {
+  groups: FilterGroup[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const mergeGroups = useMergeGroups();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setSelected([]);
+    setTargetId(null);
+    setError(null);
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      // Default the target to whatever was picked first; drop it if unchecked.
+      if (!next.includes(targetId ?? '')) setTargetId(next[0] ?? null);
+      return next;
+    });
+  }
+
+  const sourceCount = selected.length - (targetId ? 1 : 0);
+  const canSubmit = Boolean(targetId) && sourceCount >= 1;
+
+  async function handleMerge() {
+    if (!targetId) return;
+    const sourceGroupIds = selected.filter((id) => id !== targetId);
+    const targetName = groups.find((g) => g.id === targetId)?.name ?? '';
+    if (
+      !window.confirm(
+        `Scalić ${sourceGroupIds.length} ${sourceGroupIds.length === 1 ? 'grupę' : 'grupy'} do "${targetName}"? Ich filtry, dopasowania i historia pobrań przejdą do "${targetName}", a same grupy zostaną usunięte. Ogłoszenia i ulubione zostają nietknięte.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await mergeGroups.mutateAsync({ targetGroupId: targetId, sourceGroupIds });
+      onOpenChange(false);
+      reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Nie udało się scalić grup');
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) reset();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Scal grupy filtrów</DialogTitle>
+          <DialogDescription>
+            Zaznacz grupy do scalenia, potem wybierz, która z nich ma zostać jako cel -
+            pozostałe znikną, a ich filtry i historia przejdą do wybranej.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-80 space-y-1.5 overflow-y-auto">
+          {groups.map((group) => {
+            const isSelected = selected.includes(group.id);
+            const isTarget = targetId === group.id;
+            return (
+              <div
+                key={group.id}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border px-3 py-2',
+                  isSelected && 'border-primary/40 bg-primary/5',
+                )}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => toggle(group.id)}
+                  aria-label={`Zaznacz grupę ${group.name}`}
+                />
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: group.color ?? 'var(--primary)' }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{group.name}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {group.filters.length} filtrów · {group.listingCount} ofert
+                  </p>
+                </div>
+                {isSelected ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isTarget ? 'default' : 'outline'}
+                    onClick={() => setTargetId(group.id)}
+                  >
+                    {isTarget ? 'Cel scalenia' : 'Ustaw jako cel'}
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        {error ? (
+          <p className="text-destructive text-sm" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Anuluj
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSubmit || mergeGroups.isPending}
+            onClick={() => void handleMerge()}
+          >
+            {mergeGroups.isPending ? <Loader2Icon className="animate-spin" /> : <GitMergeIcon />}
+            Scal {sourceCount > 0 ? `(${sourceCount} → 1)` : ''}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

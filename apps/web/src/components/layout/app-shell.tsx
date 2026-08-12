@@ -1,12 +1,16 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
+  BookOpenIcon,
   CarFrontIcon,
+  FingerprintIcon,
   HeartIcon,
+  HistoryIcon,
   LaptopIcon,
   LayoutDashboardIcon,
   ListFilterIcon,
   LogOutIcon,
   MoonIcon,
+  ShieldIcon,
   SunIcon,
   UserIcon,
 } from 'lucide-react';
@@ -31,7 +35,17 @@ const NAV_ITEMS = [
   { to: '/groups', label: 'Grupy filtrów', icon: ListFilterIcon, exact: false },
   { to: '/listings', label: 'Ogłoszenia', icon: CarFrontIcon, exact: false },
   { to: '/favorites', label: 'Ulubione', icon: HeartIcon, exact: false },
+  { to: '/recently-viewed', label: 'Ostatnio oglądane', icon: HistoryIcon, exact: false },
+  { to: '/wiedza', label: 'Baza wiedzy', icon: BookOpenIcon, exact: false },
+  { to: '/vin', label: 'Sprawdź VIN', icon: FingerprintIcon, exact: false },
 ] as const;
+
+const ADMIN_NAV_ITEM = {
+  to: '/admin',
+  label: 'Panel admina',
+  icon: ShieldIcon,
+  exact: false,
+} as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -40,6 +54,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const initials = user
     ? `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase()
     : '';
+
+  const navItems = user?.role === 'admin' ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS;
 
   return (
     <div className="min-h-dvh">
@@ -53,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
 
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const active = item.exact
                 ? pathname === item.to
                 : pathname.startsWith(item.to);

@@ -16,6 +16,17 @@ const BASE_URL = 'https://sprzedajemy.pl';
 const CATEGORY_PATH = '/motoryzacja/samochody-osobowe';
 /** The site's own default; `items_per_page` in the URL does not raise it reliably. */
 const PAGE_SIZE = 30;
+/**
+ * Sorting is robots.txt-disallowed (see class doc comment), so search results
+ * come back in the site's own ranking order, not newest-first. That means a
+ * listing published weeks or months ago can surface in our page-fetch window
+ * for the first time on an arbitrary run - and the ingest pipeline treats
+ * "first time we see this externalId" as "new listing", firing a false
+ * "Nowe ogłoszenie!" notification for something that has been sitting on the
+ * site for a while. Dropping anything older than this at the source is the
+ * only lever this adapter has, since it cannot ask the site to sort by date.
+ */
+const MAX_LISTING_AGE_DAYS = 14;
 
 const FUEL_FROM_TEXT: Array<[RegExp, FuelType]> = [
   [/lpg/i, 'petrol_lpg'],
@@ -280,6 +291,13 @@ function matchesCriteria(
   listing: NormalizedListing,
   criteria: SearchCriteria,
 ): boolean {
+  // See MAX_LISTING_AGE_DAYS: unlike matchesCriteria's other checks, this one
+  // has no "unknown never disqualifies" exception for a missing publishedAt -
+  // a card without a parseable date is dropped too, since there is no way to
+  // tell it apart from a stale one.
+  const ageMs = listing.publishedAt ? Date.now() - listing.publishedAt.getTime() : null;
+  if (ageMs === null || ageMs > MAX_LISTING_AGE_DAYS * 24 * 60 * 60 * 1000) return false;
+
   const withinRange = (
     value: number | null | undefined,
     from: number | null | undefined,

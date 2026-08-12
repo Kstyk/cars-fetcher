@@ -14,7 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { formatRelative, label, PROVIDER_LABELS } from '@/lib/format';
-import { useMarkAllRead, useMarkRead, useNotifications } from '@/lib/queries';
+import {
+  useMarkAllRead,
+  useMarkRead,
+  useNotifications,
+  useTrackListingView,
+} from '@/lib/queries';
 import type { Notification } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +36,7 @@ export function NotificationsPage() {
   const notifications = useNotifications({ pageSize: 50 });
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
+  const trackView = useTrackListingView();
 
   const hasUnread = notifications.data?.items.some((n) => !n.readAt) ?? false;
 
@@ -123,6 +129,11 @@ export function NotificationsPage() {
                           href={notification.listingUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => {
+                            if (notification.listingId) {
+                              trackView.mutate(notification.listingId);
+                            }
+                          }}
                         >
                           <ExternalLinkIcon />
                           Otwórz w {label(PROVIDER_LABELS, notification.listingProvider)}

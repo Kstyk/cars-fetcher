@@ -81,6 +81,21 @@ const envSchema = z.object({
   SCHEDULER_CRON: z.string().default('*/30 * * * *'),
   FETCH_MAX_PAGES: z.coerce.number().int().positive().max(50).default(5),
   FETCH_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(50),
+
+  // --- Knowledge base generation (Anthropic API) -----------------------------
+  // Optional: without it, the knowledge base only ever serves what
+  // `npm run knowledge:seed` hand-curated - the admin-triggered "Generuj"
+  // action that expands it on demand is what needs this.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+
+  // --- Paid vehicle-history report (AutoDNA / carVertical) -------------------
+  // Optional, and both clients are best-effort until their API contracts are
+  // verified against real vendor docs - see
+  // modules/vin/vehicle-history/{autodna,carvertical}.client.ts.
+  VEHICLE_HISTORY_PROVIDER: z.enum(['none', 'autodna', 'carvertical']).default('none'),
+  AUTODNA_API_KEY: z.string().optional(),
+  CARVERTICAL_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -121,3 +136,9 @@ export const emailConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMT
 export const googleAuthConfigured = Boolean(
   env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET,
 );
+
+export const anthropicConfigured = Boolean(env.ANTHROPIC_API_KEY);
+
+export const vehicleHistoryConfigured =
+  (env.VEHICLE_HISTORY_PROVIDER === 'autodna' && Boolean(env.AUTODNA_API_KEY)) ||
+  (env.VEHICLE_HISTORY_PROVIDER === 'carvertical' && Boolean(env.CARVERTICAL_API_KEY));

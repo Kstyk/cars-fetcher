@@ -10,15 +10,19 @@ import { AppShell } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/misc';
 import { useAuth } from '@/lib/auth';
+import { AdminPage } from '@/pages/admin';
 import { DashboardPage } from '@/pages/dashboard';
 import { FavoritesPage } from '@/pages/favorites';
 import { GroupDetailPage } from '@/pages/group-detail';
 import { GroupsPage } from '@/pages/groups';
+import { KnowledgeModelPage, KnowledgePage } from '@/pages/knowledge';
 import { ListingsPage } from '@/pages/listings';
 import { LoginPage, RegisterPage } from '@/pages/login';
 import { NotificationsPage } from '@/pages/notifications';
 import { ProfilePage } from '@/pages/profile';
+import { RecentlyViewedPage } from '@/pages/recently-viewed';
 import { VerifyEmailPage } from '@/pages/verify-email';
+import { VinPage } from '@/pages/vin';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -224,16 +228,61 @@ const favoritesRoute = createRoute({
   component: FavoritesPage,
 });
 
+const recentlyViewedRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/recently-viewed',
+  component: RecentlyViewedPage,
+});
+
 const notificationsRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: '/notifications',
   component: NotificationsPage,
 });
 
+const knowledgeRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/wiedza',
+  component: KnowledgePage,
+});
+
+const knowledgeModelRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/wiedza/$modelId',
+  component: KnowledgeModelPage,
+});
+
+const vinRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/vin',
+  validateSearch: (search: Record<string, unknown>): { vin?: string } => ({
+    vin: typeof search.vin === 'string' ? search.vin : undefined,
+  }),
+  component: VinPage,
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: '/profile',
   component: ProfilePage,
+});
+
+/**
+ * `protectedLayoutRoute` already guarantees a signed-in user by the time this
+ * renders - only the role is left to check. Same declarative-redirect
+ * reasoning as `ProtectedShell`: no `beforeLoad` because the session resolves
+ * asynchronously.
+ */
+function AdminGuard() {
+  const { user } = useAuth();
+  if (user?.role !== 'admin') return <Navigate to="/" replace />;
+  return <AdminPage />;
+}
+
+const adminRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/admin',
+  component: AdminGuard,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -245,8 +294,13 @@ const routeTree = rootRoute.addChildren([
     groupDetailRoute,
     listingsRoute,
     favoritesRoute,
+    recentlyViewedRoute,
     notificationsRoute,
+    knowledgeRoute,
+    knowledgeModelRoute,
+    vinRoute,
     profileRoute,
+    adminRoute,
   ]),
 ]);
 

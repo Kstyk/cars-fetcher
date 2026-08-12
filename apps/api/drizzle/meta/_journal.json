@@ -71,6 +71,34 @@
       "when": 1786191069573,
       "tag": "0009_parched_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786217554997,
+      "tag": "0010_green_inhumans",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786224838458,
+      "tag": "0011_black_vision",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786260429146,
+      "tag": "0012_yummy_the_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786263520224,
+      "tag": "0013_yellow_nicolaos",
+      "breakpoints": true
     }
   ]
 }

@@ -133,6 +133,25 @@ export const SELLER_LABELS: Record<string, string> = {
   unknown: 'Nieznany',
 };
 
+export const DRIVE_LABELS: Record<string, string> = {
+  fwd: 'Napęd przedni',
+  rwd: 'Napęd tylny',
+  awd: 'Napęd na 4 koła',
+  other: 'Inny',
+};
+
+export const VEHICLE_ISSUE_SEVERITY_LABELS: Record<string, string> = {
+  minor: 'Drobna',
+  moderate: 'Umiarkowana',
+  serious: 'Poważna',
+};
+
+export const VEHICLE_NOTE_KIND_LABELS: Record<string, string> = {
+  reputation: 'Opinie i reputacja',
+  ownership_cost: 'Koszty eksploatacji',
+  buying_advice: 'Na co zwrócić uwagę',
+};
+
 export function label(
   dictionary: Record<string, string>,
   key: string | null | undefined,

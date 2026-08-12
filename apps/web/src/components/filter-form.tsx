@@ -1,3 +1,4 @@
+import { CheckIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,9 +16,17 @@ import { useProviders, useTaxonomy } from '@/lib/queries';
 import type { BodyType, Filter, FuelType, Gearbox } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-/** The criteria a single filter row carries, in the shape the API expects. */
+/**
+ * The criteria a filter row carries, in the shape the API expects.
+ * `providers` is plural: when creating a new filter, checking several
+ * services fills out the same criteria once and produces one filter per
+ * service - the fields below apply identically to all of them. Editing an
+ * existing filter always keeps this down to the one provider it already has
+ * (see `allowMultipleProviders` on `FilterForm`), since a saved filter is one
+ * row for one service.
+ */
 export interface FilterFormValue {
-  provider: string;
+  providers: string[];
   make: string | null;
   model: string | null;
   yearFrom: string;
@@ -47,7 +56,7 @@ export interface FilterFormValue {
 }
 
 export const EMPTY_FILTER_FORM: FilterFormValue = {
-  provider: 'otomoto',
+  providers: ['otomoto'],
   make: null,
   model: null,
   yearFrom: '',
@@ -76,13 +85,17 @@ export const EMPTY_FILTER_FORM: FilterFormValue = {
   equipment: [],
 };
 
-/** Converts the form into the JSON body the filters endpoint validates. */
-export function toFilterPayload(value: FilterFormValue): Record<string, unknown> {
+/**
+ * Converts the form into the JSON bodies the filters endpoint validates -
+ * one per checked provider, all sharing the same criteria. Almost always a
+ * single-element array (editing, or creating for just one service); only
+ * multi-provider creation produces more than one.
+ */
+export function toFilterPayload(value: FilterFormValue): Record<string, unknown>[] {
   const number = (input: string) =>
     input.trim() === '' ? null : Number(input);
 
-  return {
-    provider: value.provider,
+  const shared = {
     name: [value.make, value.model].filter(Boolean).join(' ') || null,
     make: value.make,
     model: value.model,
@@ -111,6 +124,8 @@ export function toFilterPayload(value: FilterFormValue): Record<string, unknown>
     vatInvoice: value.vatInvoice || null,
     equipment: value.equipment.length ? value.equipment : null,
   };
+
+  return value.providers.map((provider) => ({ provider, ...shared }));
 }
 
 /** Rebuilds the form state from a saved filter, for editing and duplicating. */
@@ -119,7 +134,7 @@ export function filterToFormValue(filter: Filter): FilterFormValue {
     value === null || value === undefined ? '' : String(value);
 
   return {
-    provider: filter.provider,
+    providers: [filter.provider],
     make: filter.make,
     model: filter.model,
     yearFrom: text(filter.yearFrom),
@@ -271,15 +286,39 @@ const BODY_OPTIONS = Object.entries(BODY_LABELS).map(([value, label]) => ({
 export function FilterForm({
   value,
   onChange,
+  allowMultipleProviders = false,
 }: {
   value: FilterFormValue;
   onChange: (value: FilterFormValue) => void;
+  /**
+   * Creating a new filter can fan out to several services at once - check
+   * "Serwis" checks/unchecks freely, and one filter is created per checked
+   * service. Editing an existing filter is one specific row for one
+   * specific service, so this stays off there and clicking a different
+   * service just swaps it instead of adding to a set.
+   */
+  allowMultipleProviders?: boolean;
 }) {
   const taxonomy = useTaxonomy();
   const providers = useProviders();
 
   function patch(update: Partial<FilterFormValue>): void {
     onChange({ ...value, ...update });
+  }
+
+  function toggleProvider(providerId: string): void {
+    if (!allowMultipleProviders) {
+      patch({ providers: [providerId] });
+      return;
+    }
+    const checked = value.providers.includes(providerId);
+    // Never let the set go empty - toFilterPayload needs at least one.
+    if (checked && value.providers.length === 1) return;
+    patch({
+      providers: checked
+        ? value.providers.filter((p) => p !== providerId)
+        : [...value.providers, providerId],
+    });
   }
 
   const makeOptions = useMemo(
@@ -322,7 +361,11 @@ export function FilterForm({
     <div className="space-y-5">
       <Section
         title="Serwis"
-        description="Filtr działa po stronie wybranego serwisu — każdy ma własny zestaw dostępnych kryteriów."
+        description={
+          allowMultipleProviders
+            ? 'Zaznacz jeden lub więcej serwisów — dla każdego powstanie osobny filtr z tymi samymi kryteriami. Każdy serwis ma własny zestaw dostępnych kryteriów.'
+            : 'Filtr działa po stronie wybranego serwisu — każdy ma własny zestaw dostępnych kryteriów.'
+        }
       >
         <div className="grid gap-2 sm:grid-cols-4">
           {(providers.data ?? []).map((entry) => (
@@ -330,16 +373,36 @@ export function FilterForm({
               key={entry.provider}
               type="button"
               disabled={!entry.implemented}
-              onClick={() => patch({ provider: entry.provider })}
+              onClick={() => toggleProvider(entry.provider)}
               className={cn(
                 'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                value.provider === entry.provider
+                value.providers.includes(entry.provider)
                   ? 'border-primary bg-primary/10 font-medium'
                   : 'hover:bg-accent/50',
                 !entry.implemented && 'cursor-not-allowed opacity-50',
               )}
             >
-              <span>{entry.label}</span>
+              <span className="flex items-center gap-1.5">
+                {allowMultipleProviders ? (
+                  // A plain indicator, not a real `Checkbox` - the whole tile
+                  // is already the clickable control (it's a `<button>`), and
+                  // a checkbox nested inside a button is invalid HTML.
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'flex size-4 shrink-0 items-center justify-center rounded-sm border',
+                      value.providers.includes(entry.provider)
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'border-input',
+                    )}
+                  >
+                    {value.providers.includes(entry.provider) ? (
+                      <CheckIcon className="size-3" />
+                    ) : null}
+                  </span>
+                ) : null}
+                {entry.label}
+              </span>
               {!entry.implemented ? (
                 <span className="text-muted-foreground text-xs">wkrótce</span>
               ) : null}

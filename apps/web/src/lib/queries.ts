@@ -6,6 +6,10 @@ import {
 } from '@tanstack/react-query';
 import { api } from './api';
 import type {
+  AdminFetchRun,
+  AdminScrapers,
+  AdminStats,
+  AdminUser,
   Favorite,
   FetchRun,
   FilterGroup,
@@ -19,6 +23,12 @@ import type {
   ProviderInfo,
   Taxonomy,
   User,
+  SellerProfile,
+  VehicleHistoryReport,
+  VehicleModelDetail,
+  VehicleModelSummary,
+  VehicleSearchResult,
+  VinLookupResult,
 } from './types';
 
 export const queryKeys = {
@@ -117,6 +127,26 @@ export function useDeleteGroup() {
   });
 }
 
+/** Folds one or more groups into a target group; sources end up deleted. */
+export function useMergeGroups() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      targetGroupId,
+      sourceGroupIds,
+    }: {
+      targetGroupId: string;
+      sourceGroupIds: string[];
+    }) =>
+      api.post<FilterGroup>(`/api/filter-groups/${targetGroupId}/merge`, { sourceGroupIds }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: ['listings'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
 export function useAddFilter(groupId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -149,6 +179,22 @@ export function useDeleteFilter(groupId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
       void queryClient.invalidateQueries({ queryKey: queryKeys.group(groupId) });
+    },
+  });
+}
+
+/** Drops matches whose listing no longer fits its filter's *current* criteria. */
+export function useCleanStaleMatches(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ removed: number; checkedFilters: number }>(
+        `/api/filter-groups/${groupId}/clean-matches`,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.group(groupId) });
+      void queryClient.invalidateQueries({ queryKey: ['listings'] });
     },
   });
 }
@@ -206,6 +252,20 @@ export function useCities() {
     queryFn: () =>
       api.get<Array<{ city: string; region: string | null }>>('/api/listings/cities'),
     staleTime: 5 * 60_000,
+  });
+}
+
+/** Fires on every click-through to the marketplace - not when a card renders. */
+export function useTrackListingView() {
+  return useMutation({
+    mutationFn: (listingId: string) => api.post<void>(`/api/listings/${listingId}/view`),
+  });
+}
+
+export function useRecentlyViewed(limit = 60) {
+  return useQuery({
+    queryKey: ['listings', 'recently-viewed', limit],
+    queryFn: () => api.get<Listing[]>('/api/listings/recently-viewed', { limit }),
   });
 }
 
@@ -312,5 +372,152 @@ export function useChangePassword() {
 export function useResendVerification() {
   return useMutation({
     mutationFn: () => api.post<void>('/api/auth/resend-verification'),
+  });
+}
+
+/* ---------------------------------- Admin ---------------------------------- */
+
+export function useAdminStats() {
+  return useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: () => api.get<AdminStats>('/api/admin/stats'),
+  });
+}
+
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: ['admin', 'users'],
+    queryFn: () => api.get<AdminUser[]>('/api/admin/users'),
+  });
+}
+
+export function useUpdateAdminUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { role?: 'user' | 'admin'; isActive?: boolean } }) =>
+      api.patch<void>(`/api/admin/users/${id}`, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] });
+    },
+  });
+}
+
+export function useAdminScrapers() {
+  return useQuery({
+    queryKey: ['admin', 'scrapers'],
+    queryFn: () => api.get<AdminScrapers>('/api/admin/scrapers'),
+    // The whole point is watching something that changes on its own.
+    refetchInterval: 30_000,
+  });
+}
+
+export function useResetScraperCircuit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) =>
+      api.post<{ reset: boolean }>(`/api/admin/scrapers/${encodeURIComponent(host)}/reset`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'scrapers'] });
+    },
+  });
+}
+
+export function useAdminRuns(limit = 50) {
+  return useQuery({
+    queryKey: ['admin', 'runs', limit],
+    queryFn: () => api.get<AdminFetchRun[]>('/api/admin/runs', { limit }),
+  });
+}
+
+/* ------------------------------ knowledge base ---------------------------- */
+
+export function useKnowledgeMakes() {
+  return useQuery({
+    queryKey: ['knowledge', 'makes'],
+    queryFn: () => api.get<string[]>('/api/knowledge/makes'),
+    staleTime: 10 * 60_000, // reference data, not worth refetching often
+  });
+}
+
+export function useKnowledgeModels(make: string | null) {
+  return useQuery({
+    queryKey: ['knowledge', 'makes', make, 'models'],
+    queryFn: () =>
+      api.get<VehicleModelSummary[]>(`/api/knowledge/makes/${encodeURIComponent(make!)}/models`),
+    enabled: Boolean(make),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useKnowledgeModel(id: string | null) {
+  return useQuery({
+    queryKey: ['knowledge', 'models', id],
+    queryFn: () => api.get<VehicleModelDetail>(`/api/knowledge/models/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useKnowledgeSearch(q: string) {
+  return useQuery({
+    queryKey: ['knowledge', 'search', q],
+    queryFn: () => api.get<VehicleSearchResult[]>('/api/knowledge/search', { q }),
+    enabled: q.trim().length >= 2,
+  });
+}
+
+export function useKnowledgeGenerateAvailable() {
+  return useQuery({
+    queryKey: ['knowledge', 'generate', 'available'],
+    queryFn: () => api.get<{ available: boolean }>('/api/knowledge/generate/available'),
+  });
+}
+
+export function useDecodeVin(vin: string | null) {
+  return useQuery({
+    queryKey: ['vin', vin],
+    queryFn: () => api.get<VinLookupResult>(`/api/vin/${encodeURIComponent(vin ?? '')}`),
+    enabled: Boolean(vin && vin.trim().length > 0),
+    staleTime: Infinity, // a VIN's decode never changes
+  });
+}
+
+/** Whether a paid history provider (AutoDNA/carVertical) is configured server-side. */
+export function useVehicleHistoryAvailable() {
+  return useQuery({
+    queryKey: ['vin', 'history', 'available'],
+    queryFn: () => api.get<{ available: boolean; provider: string | null }>('/api/vin/history/available'),
+  });
+}
+
+/** Admin-only, paid per call - never fires on its own, only on an explicit click. */
+export function useFetchVehicleHistory() {
+  return useMutation({
+    mutationFn: (vin: string) =>
+      api.get<VehicleHistoryReport>(`/api/vin/${encodeURIComponent(vin)}/history`),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function useSellerProfile(name: string | null) {
+  return useQuery({
+    queryKey: ['sellers', 'profile', name],
+    queryFn: () => api.get<SellerProfile>('/api/sellers/profile', { name: name ?? '' }),
+    enabled: Boolean(name && name.trim().length > 0),
+  });
+}
+
+/** Admin-only: asks the LLM to write up a make/model (optionally a specific generation). */
+export function useGenerateKnowledge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { make: string; model: string; generation?: string }) =>
+      api.post<VehicleModelDetail>('/api/knowledge/generate', input),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'makes'] });
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'makes', result.make] });
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'models', result.id] });
+    },
   });
 }

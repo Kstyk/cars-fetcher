@@ -205,6 +205,24 @@ export class ScrapingClient {
       : new UpstreamError(`Nie udało się pobrać ${target.host}`);
   }
 
+  /** For the admin panel - which hosts are currently blocked, and until when. */
+  getCircuitStatus(): Array<{ host: string; streak: number; openUntil: number | null }> {
+    const hosts = new Set([...this.consecutive403.keys(), ...this.circuitOpenUntil.keys()]);
+    return [...hosts].map((host) => ({
+      host,
+      streak: this.consecutive403.get(host) ?? 0,
+      openUntil: this.circuitOpenUntil.get(host) ?? null,
+    }));
+  }
+
+  /** Manual override for the admin panel - clears a tripped circuit early. */
+  resetCircuit(host: string): boolean {
+    const had = this.circuitOpenUntil.has(host) || this.consecutive403.has(host);
+    this.circuitOpenUntil.delete(host);
+    this.consecutive403.delete(host);
+    return had;
+  }
+
   /** Bounded cache - scraping many filters must not grow the heap forever. */
   private pruneCache(): void {
     if (this.cache.size <= 200) return;

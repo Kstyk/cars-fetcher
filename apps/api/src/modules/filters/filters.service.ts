@@ -1,4 +1,15 @@
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notInArray,
+  sql,
+} from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import {
   fetchRuns,
@@ -6,10 +17,12 @@ import {
   filters,
   listingMatches,
   listings,
+  notifications,
   type Filter,
   type FilterGroup,
 } from '../../db/schema.js';
 import { ConflictError, NotFoundError } from '../../lib/errors.js';
+import { buildFilterMatchCondition } from './filter-match.js';
 import type { CreateGroupInput, FilterInput } from './filters.schemas.js';
 
 export interface GroupWithStats extends FilterGroup {
@@ -44,7 +57,11 @@ export async function listGroups(userId: string): Promise<GroupWithStats[]> {
     db
       .select({
         groupId: listingMatches.groupId,
-        total: count(),
+        // Distinct on the listing, not a plain row count: two now-deleted
+        // filters that had both matched the same listing each leave their
+        // own orphaned (filterId null) row behind, which would otherwise
+        // double-count that one car.
+        total: countDistinct(listingMatches.listingId),
         /*
          * "New" = discovered since the previous fetch, so each completed run
          * clears the badge.
@@ -54,7 +71,7 @@ export async function listGroups(userId: string): Promise<GroupWithStats[]> {
          * Groups that never ran twice have no marker yet; there the publication
          * date is the closest honest answer.
          */
-        fresh: sql<number>`count(*) filter (
+        fresh: sql<number>`count(distinct ${listingMatches.listingId}) filter (
           where ${listingMatches.firstMatchedAt} > coalesce(
             ${filterGroups.previousFetchedAt},
             now() - interval '24 hours'
@@ -199,6 +216,60 @@ export async function deleteGroup(userId: string, groupId: string): Promise<void
   await db.delete(filterGroups).where(eq(filterGroups.id, groupId));
 }
 
+/**
+ * Folds one or more groups into `targetGroupId`: their filters move over (so
+ * they keep fetching, now under the target's schedule/notification
+ * settings), and so does everything that points at them - matches, fetch
+ * history, notifications - before the now-empty source groups are deleted.
+ * Nothing is re-created and no listing is touched; this only repoints
+ * ownership, the same "history survives, only the container changes" idea
+ * `removeStaleMatches`/the filter-delete fix already lean on elsewhere in
+ * this module.
+ */
+export async function mergeGroups(
+  userId: string,
+  targetGroupId: string,
+  sourceGroupIds: string[],
+): Promise<GroupWithStats> {
+  const sources = [...new Set(sourceGroupIds)].filter((id) => id !== targetGroupId);
+  if (sources.length === 0) {
+    throw new ConflictError('Wskaż co najmniej jedną inną grupę do scalenia');
+  }
+
+  const owned = await db
+    .select({ id: filterGroups.id })
+    .from(filterGroups)
+    .where(
+      and(inArray(filterGroups.id, [targetGroupId, ...sources]), eq(filterGroups.userId, userId)),
+    );
+
+  if (owned.length !== sources.length + 1) {
+    throw new NotFoundError('Jedna z grup nie istnieje');
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(filters)
+      .set({ groupId: targetGroupId })
+      .where(inArray(filters.groupId, sources));
+    await tx
+      .update(listingMatches)
+      .set({ groupId: targetGroupId })
+      .where(inArray(listingMatches.groupId, sources));
+    await tx
+      .update(fetchRuns)
+      .set({ groupId: targetGroupId })
+      .where(inArray(fetchRuns.groupId, sources));
+    await tx
+      .update(notifications)
+      .set({ groupId: targetGroupId })
+      .where(inArray(notifications.groupId, sources));
+    await tx.delete(filterGroups).where(inArray(filterGroups.id, sources));
+  });
+
+  return getGroup(userId, targetGroupId);
+}
+
 export async function addFilter(
   userId: string,
   groupId: string,
@@ -245,6 +316,67 @@ export async function deleteFilter(
     .returning({ id: filters.id });
 
   if (deleted.length === 0) throw new NotFoundError('Filtr nie istnieje');
+}
+
+/**
+ * Drops matches the user no longer wants to see, two kinds at once:
+ *
+ * 1. The listing no longer satisfies its filter's *current* criteria - a
+ *    filter edited after the fact (price ceiling lowered, a fuel type
+ *    unchecked, ...). Nothing else ever re-evaluates an existing match,
+ *    since a fetch only adds/refreshes matches for what it just found.
+ * 2. The filter itself is gone entirely (`filterId IS NULL` - see the schema
+ *    doc comment on `listingMatches.filterId`). Deleting a filter leaves its
+ *    old finds reachable on purpose, in case they are still wanted; this is
+ *    the deliberate, on-demand way to say "no, I'm done with those too" -
+ *    e.g. dropped the Alfa Romeo filter and do not want its old matches
+ *    hanging around either.
+ *
+ * Either way, only the match link goes - never the listing itself, never
+ * `isArchived`. The car may still be for sale, it just stopped being (or
+ * outright stopped being asked to be) what this group is looking for. A
+ * listing left with no match anywhere (this was its only one) simply stops
+ * showing up anywhere in the app, which is the point - it is not "sold", so
+ * it must not carry that badge.
+ */
+export async function removeStaleMatches(
+  userId: string,
+  groupId: string,
+): Promise<{ removed: number; checkedFilters: number }> {
+  await assertGroupOwner(userId, groupId);
+
+  const groupFilters = await db
+    .select()
+    .from(filters)
+    .where(eq(filters.groupId, groupId));
+
+  let removed = 0;
+  for (const filter of groupFilters) {
+    const stillMatching = db
+      .select({ id: listings.id })
+      .from(listings)
+      .where(buildFilterMatchCondition(filter));
+
+    const dropped = await db
+      .delete(listingMatches)
+      .where(
+        and(
+          eq(listingMatches.filterId, filter.id),
+          notInArray(listingMatches.listingId, stillMatching),
+        ),
+      )
+      .returning({ listingId: listingMatches.listingId });
+
+    removed += dropped.length;
+  }
+
+  const orphaned = await db
+    .delete(listingMatches)
+    .where(and(eq(listingMatches.groupId, groupId), isNull(listingMatches.filterId)))
+    .returning({ listingId: listingMatches.listingId });
+  removed += orphaned.length;
+
+  return { removed, checkedFilters: groupFilters.length };
 }
 
 export async function listRuns(userId: string, groupId: string, limit = 20) {

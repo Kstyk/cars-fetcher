@@ -17,6 +17,7 @@ import {
   formatPrice,
   label,
 } from '@/lib/format';
+import { useTrackListingView } from '@/lib/queries';
 import type { Listing } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -134,6 +135,8 @@ function CompareDialog({
   onOpenChange: (open: boolean) => void;
   items: Listing[];
 }) {
+  const trackView = useTrackListingView();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-3xl">
@@ -153,6 +156,7 @@ function CompareDialog({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group block"
+                      onClick={() => trackView.mutate(item.id)}
                     >
                       <div className="bg-muted mb-2 aspect-4/3 w-full overflow-hidden rounded-lg border">
                         {item.thumbnailUrl ? (

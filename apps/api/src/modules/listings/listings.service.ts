@@ -21,6 +21,7 @@ import {
   listingMatches,
   listingPriceHistory,
   listings,
+  listingViews,
 } from '../../db/schema.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { paginate, type Paginated } from '../../lib/pagination.js';
@@ -45,6 +46,7 @@ export interface ListingView {
   bodyType: string | null;
   enginePowerHp: number | null;
   engineCapacityCm3: number | null;
+  vin: string | null;
   city: string | null;
   region: string | null;
   countryOrigin: string | null;
@@ -68,10 +70,160 @@ export interface ListingView {
    * make/model/year/mileage, or too few comparables exist to trust a median.
    */
   priceVsMarketPct: number | null;
+  /** The same car, still live on another marketplace - see `mergedIntoId`. */
+  duplicates: ListingDuplicate[];
+  /** Days since the ad went up (marketplace's own date, `firstSeenAt` as fallback). */
+  daysListed: number;
+  /** Median days-to-sell for similar cars that already sold. `null` = too few comparables. */
+  medianDaysToSellCohort: number | null;
+}
+
+export interface ListingDuplicate {
+  id: string;
+  provider: string;
+  url: string;
+  price: number | null;
+  city: string | null;
 }
 
 /** Below this many comparables, a median is noise, not a signal. */
 const MIN_MARKET_SAMPLE_SIZE = 5;
+
+/**
+ * The full per-row shape every listing list (search results, recently
+ * viewed) renders the same `ListingCard` from - one set of column
+ * definitions so the favourite/group/price-trend subqueries are not
+ * duplicated (and cannot drift) between them.
+ */
+function listingColumns(userId: string) {
+  return {
+    id: listings.id,
+    provider: listings.provider,
+    externalId: listings.externalId,
+    url: listings.url,
+    title: listings.title,
+    make: listings.make,
+    model: listings.model,
+    version: listings.version,
+    price: listings.price,
+    currency: listings.currency,
+    year: listings.year,
+    mileageKm: listings.mileageKm,
+    fuelType: listings.fuelType,
+    gearbox: listings.gearbox,
+    bodyType: listings.bodyType,
+    enginePowerHp: listings.enginePowerHp,
+    engineCapacityCm3: listings.engineCapacityCm3,
+    vin: listings.vin,
+    city: listings.city,
+    region: listings.region,
+    countryOrigin: listings.countryOrigin,
+    color: listings.color,
+    sellerType: listings.sellerType,
+    sellerName: listings.sellerName,
+    thumbnailUrl: listings.thumbnailUrl,
+    publishedAt: listings.publishedAt,
+    firstSeenAt: listings.firstSeenAt,
+    lastSeenAt: listings.lastSeenAt,
+    isActive: listings.isActive,
+    isArchived: listings.isArchived,
+    archivedAt: listings.archivedAt,
+    // Table names are spelled out: inside a select field drizzle emits
+    // unqualified column names, which would collide in these subqueries.
+    isFavorite: sql<boolean>`exists (
+      select 1 from favorites f
+      where f.listing_id = listings.id and f.user_id = ${userId}
+    )`.mapWith(Boolean),
+    groups: sql<Array<{ id: string; name: string; color: string | null }>>`coalesce((
+      select jsonb_agg(distinct jsonb_build_object(
+        'id', g.id, 'name', g.name, 'color', g.color
+      ))
+      from listing_matches m
+      join filter_groups g on g.id = m.group_id
+      where m.listing_id = listings.id and g.user_id = ${userId}
+    ), '[]'::jsonb)`,
+    priceChangePct: sql<number | null>`(
+      select h.delta_pct from listing_price_history h
+      where h.listing_id = listings.id
+      order by h.recorded_at desc
+      limit 1
+    )`.mapWith((v) => (v === null ? null : Number(v))),
+    // The other side of `mergedIntoId`: this listing's own followers, i.e.
+    // the same car live on other marketplaces. Only ever populated on a
+    // primary row - a merged-away row is excluded from results entirely (see
+    // the `WHERE` clause in `searchListings`), so it can never itself be
+    // "this listing" here.
+    duplicates: sql<ListingDuplicate[]>`coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', d.id, 'provider', d.provider, 'url', d.url, 'price', d.price, 'city', d.city
+      ) order by d.price asc nulls last)
+      from listings d
+      where d.merged_into_id = listings.id
+        and d.is_active = true
+        and d.is_archived = false
+    ), '[]'::jsonb)`,
+    // Same make/model, published within a year, mileage within 30% -
+    // "similar enough" without shrinking the cohort to nothing. One
+    // correlated subquery does both the median and the sample size so
+    // the cohort is only scanned once.
+    priceVsMarketPct: sql<number | null>`(
+      select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
+        then round((
+          (${listings.price} - (stats->>'median')::numeric)
+          / (stats->>'median')::numeric * 100
+        )::numeric, 1)
+        else null
+      end
+      from (
+        select jsonb_build_object(
+          'median', percentile_cont(0.5) within group (order by l2.price),
+          'count', count(*)
+        ) as stats
+        from listings l2
+        where l2.make = listings.make
+          and l2.model = listings.model
+          and l2.year between listings.year - 1 and listings.year + 1
+          and l2.mileage_km between listings.mileage_km * 0.7 and listings.mileage_km * 1.3
+          and l2.price is not null
+          and l2.is_active = true
+          and l2.is_archived = false
+          and l2.id != listings.id
+      ) cohort
+    )`.mapWith((v) => (v === null ? null : Number(v))),
+    // How long this exact ad has been up - the raw number the frontend
+    // compares against `medianDaysToSellCohort` to flag it as sitting
+    // unusually long (see `SellerDialog`/the "long on market" badge).
+    daysListed: sql<number>`extract(epoch from (
+      now() - coalesce(${listings.publishedAt}, ${listings.firstSeenAt})
+    )) / 86400`.mapWith((v) => Math.round(Number(v))),
+    // Same make/model, year within a year - how long *similar cars* took to
+    // sell, from ones that already did (mileage is left out here, unlike the
+    // price cohort above: archived rows are scarcer, and days-to-sell
+    // correlates far less with exact mileage than price does, so the wider
+    // net matters more than the extra precision would).
+    medianDaysToSellCohort: sql<number | null>`(
+      select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
+        then round((stats->>'median')::numeric, 1)
+        else null
+      end
+      from (
+        select jsonb_build_object(
+          'median', percentile_cont(0.5) within group (
+            order by extract(epoch from (l2.archived_at - coalesce(l2.published_at, l2.first_seen_at))) / 86400
+          ),
+          'count', count(*)
+        ) as stats
+        from listings l2
+        where l2.make = listings.make
+          and l2.model = listings.model
+          and l2.year between listings.year - 1 and listings.year + 1
+          and l2.is_archived = true
+          and l2.archived_at is not null
+          and l2.id != listings.id
+      ) cohort
+    )`.mapWith((v) => (v === null ? null : Number(v))),
+  };
+}
 
 /**
  * Reads listings out of our own database - the fetcher is what talks to
@@ -114,6 +266,21 @@ export async function searchListings(
         ),
     ),
   ];
+
+  // A listing folded into another (the same car, live on a different
+  // marketplace - see `mergedIntoId`) drops out of the results on its own;
+  // it surfaces in its primary's `duplicates` list instead. The one
+  // exception: once that primary itself is archived (sold on *that* site),
+  // this row stops being a mere alternate and becomes its own listing again
+  // - it may still be genuinely available through the marketplace it came
+  // from, which the user should not lose sight of just because the listing
+  // that happened to absorb it first sold out.
+  conditions.push(sql`(
+    ${listings.mergedIntoId} IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM listings p WHERE p.id = ${listings.mergedIntoId} AND p.is_archived = false
+    )
+  )`);
 
   // Archived listings are excluded by default - they are no longer for sale.
   if (query.archived === 'no') conditions.push(eq(listings.isArchived, false));
@@ -210,86 +377,7 @@ export async function searchListings(
 
   const [rows, [totals]] = await Promise.all([
     db
-      .select({
-        id: listings.id,
-        provider: listings.provider,
-        externalId: listings.externalId,
-        url: listings.url,
-        title: listings.title,
-        make: listings.make,
-        model: listings.model,
-        version: listings.version,
-        price: listings.price,
-        currency: listings.currency,
-        year: listings.year,
-        mileageKm: listings.mileageKm,
-        fuelType: listings.fuelType,
-        gearbox: listings.gearbox,
-        bodyType: listings.bodyType,
-        enginePowerHp: listings.enginePowerHp,
-        engineCapacityCm3: listings.engineCapacityCm3,
-        city: listings.city,
-        region: listings.region,
-        countryOrigin: listings.countryOrigin,
-        color: listings.color,
-        sellerType: listings.sellerType,
-        sellerName: listings.sellerName,
-        thumbnailUrl: listings.thumbnailUrl,
-        publishedAt: listings.publishedAt,
-        firstSeenAt: listings.firstSeenAt,
-        lastSeenAt: listings.lastSeenAt,
-        isActive: listings.isActive,
-        isArchived: listings.isArchived,
-        archivedAt: listings.archivedAt,
-        // Table names are spelled out: inside a select field drizzle emits
-        // unqualified column names, which would collide in these subqueries.
-        isFavorite: sql<boolean>`exists (
-          select 1 from favorites f
-          where f.listing_id = listings.id and f.user_id = ${userId}
-        )`.mapWith(Boolean),
-        groups: sql<Array<{ id: string; name: string; color: string | null }>>`coalesce((
-          select jsonb_agg(distinct jsonb_build_object(
-            'id', g.id, 'name', g.name, 'color', g.color
-          ))
-          from listing_matches m
-          join filter_groups g on g.id = m.group_id
-          where m.listing_id = listings.id and g.user_id = ${userId}
-        ), '[]'::jsonb)`,
-        priceChangePct: sql<number | null>`(
-          select h.delta_pct from listing_price_history h
-          where h.listing_id = listings.id
-          order by h.recorded_at desc
-          limit 1
-        )`.mapWith((v) => (v === null ? null : Number(v))),
-        // Same make/model, published within a year, mileage within 30% -
-        // "similar enough" without shrinking the cohort to nothing. One
-        // correlated subquery does both the median and the sample size so
-        // the cohort is only scanned once.
-        priceVsMarketPct: sql<number | null>`(
-          select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
-            then round((
-              (${listings.price} - (stats->>'median')::numeric)
-              / (stats->>'median')::numeric * 100
-            )::numeric, 1)
-            else null
-          end
-          from (
-            select jsonb_build_object(
-              'median', percentile_cont(0.5) within group (order by l2.price),
-              'count', count(*)
-            ) as stats
-            from listings l2
-            where l2.make = listings.make
-              and l2.model = listings.model
-              and l2.year between listings.year - 1 and listings.year + 1
-              and l2.mileage_km between listings.mileage_km * 0.7 and listings.mileage_km * 1.3
-              and l2.price is not null
-              and l2.is_active = true
-              and l2.is_archived = false
-              and l2.id != listings.id
-          ) cohort
-        )`.mapWith((v) => (v === null ? null : Number(v))),
-      })
+      .select(listingColumns(userId))
       .from(listings)
       .where(where)
       .orderBy(...orderBy(query.sort))
@@ -365,7 +453,11 @@ export async function getListing(userId: string, listingId: string) {
       })
       .from(listingMatches)
       .innerJoin(filterGroups, eq(filterGroups.id, listingMatches.groupId))
-      .innerJoin(filters, eq(filters.id, listingMatches.filterId))
+      // Left, not inner: a deleted filter nulls `filterId` (see the schema
+      // doc comment) but the group still owns the match, so the listing must
+      // stay reachable here too - an inner join would 404 a listing that
+      // `searchListings` (group-scoped, not filter-scoped) still lists fine.
+      .leftJoin(filters, eq(filters.id, listingMatches.filterId))
       .where(
         and(eq(listingMatches.listingId, listingId), eq(filterGroups.userId, userId)),
       ),
@@ -476,16 +568,79 @@ export async function listFavorites(userId: string) {
         join filter_groups g on g.id = m.group_id
         where m.listing_id = ${listings.id} and g.user_id = ${userId}
       ), '[]'::jsonb)`,
+      duplicates: sql<ListingDuplicate[]>`coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'id', d.id, 'provider', d.provider, 'url', d.url, 'price', d.price, 'city', d.city
+        ) order by d.price asc nulls last)
+        from listings d
+        where d.merged_into_id = ${listings.id}
+          and d.is_active = true
+          and d.is_archived = false
+      ), '[]'::jsonb)`,
     })
     .from(favorites)
     .innerJoin(listings, eq(listings.id, favorites.listingId))
     .where(eq(favorites.userId, userId))
     .orderBy(desc(favorites.createdAt));
 
-  return rows.map(({ listing, groups, ...rest }) => ({
+  return rows.map(({ listing, groups, duplicates, ...rest }) => ({
     ...rest,
-    listing: { ...listing, groups, isFavorite: true, priceChangePct: null },
+    listing: {
+      ...listing,
+      groups,
+      duplicates,
+      isFavorite: true,
+      priceChangePct: null,
+      daysListed: Math.round(
+        (Date.now() - (listing.publishedAt ?? listing.firstSeenAt).getTime()) / 86_400_000,
+      ),
+      // Not worth a second cohort subquery here for a page that is usually
+      // a handful of rows - the stale-listing badge just stays off on
+      // Favorites, `priceVsMarketPct` already carries the "good price" signal.
+      medianDaysToSellCohort: null,
+    },
   }));
+}
+
+/* ------------------------------ recently viewed ---------------------------- */
+
+/**
+ * Fired when the user actually clicks through to the marketplace - not when
+ * a card merely renders in a list. Repeat clicks bump the same row instead
+ * of piling up duplicates, so "recently viewed" reads as a stack of distinct
+ * cars, not a click log.
+ */
+export async function recordListingView(userId: string, listingId: string): Promise<void> {
+  const [listing] = await db
+    .select({ id: listings.id })
+    .from(listings)
+    .where(eq(listings.id, listingId))
+    .limit(1);
+
+  if (!listing) throw new NotFoundError('Ogłoszenie nie istnieje');
+
+  await db
+    .insert(listingViews)
+    .values({ userId, listingId })
+    .onConflictDoUpdate({
+      target: [listingViews.userId, listingViews.listingId],
+      set: { viewedAt: new Date(), viewCount: sql`${listingViews.viewCount} + 1` },
+    });
+}
+
+export async function listRecentlyViewed(
+  userId: string,
+  limit = 60,
+): Promise<ListingView[]> {
+  const rows = await db
+    .select(listingColumns(userId))
+    .from(listingViews)
+    .innerJoin(listings, eq(listings.id, listingViews.listingId))
+    .where(eq(listingViews.userId, userId))
+    .orderBy(desc(listingViews.viewedAt))
+    .limit(limit);
+
+  return rows as ListingView[];
 }
 
 /* --------------------------------- stats --------------------------------- */

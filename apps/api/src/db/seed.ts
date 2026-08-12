@@ -31,6 +31,8 @@ async function seed(): Promise<void> {
         firstName: 'Jan',
         lastName: 'Kowalski',
         emailVerifiedAt: new Date(),
+        // Single-operator app - the one demo account is the admin too.
+        role: 'admin',
       })
       .returning({ id: users.id });
 

@@ -1,8 +1,9 @@
-import { CarFrontIcon, SearchIcon, XIcon } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { CarFrontIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import type { ListingsSearch } from '@/router';
 import { ListingCard } from '@/components/listing-card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ import {
   useProviders,
   useTaxonomy,
 } from '@/lib/queries';
+import { cn } from '@/lib/utils';
 
 const SORT_OPTIONS = [
   // "Newest" follows the marketplace's publication date, not our fetch time.
@@ -140,6 +142,9 @@ export function ListingsPage() {
   // shape is already guaranteed by the route's `validateSearch`.
   const search = useSearch({ strict: false }) as ListingsSearch;
   const navigate = useNavigate();
+  // Collapsed by default only below `sm` (see the toggle button's `sm:hidden`
+  // guard) - the panel is always shown at `sm` and up regardless of this.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const filters = useMemo(() => fromSearch(search), [search]);
   const location = useMemo(() => locationFromSearch(search), [search]);
@@ -220,6 +225,29 @@ export function ListingsPage() {
     JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS) ||
     JSON.stringify(location) !== JSON.stringify(EMPTY_LOCATION);
 
+  // Drives the badge on the mobile "Filtry" toggle, so it is clear something
+  // is narrowing the results even while the panel is collapsed.
+  const activeFilterCount = [
+    filters.groupId !== ALL,
+    filters.provider.length > 0,
+    Boolean(filters.make),
+    Boolean(filters.model),
+    filters.fuelType !== ALL,
+    filters.gearbox !== ALL,
+    filters.bodyType !== ALL,
+    filters.archived !== 'no',
+    Boolean(filters.priceFrom),
+    Boolean(filters.priceTo),
+    Boolean(filters.yearFrom),
+    Boolean(filters.mileageTo),
+    Boolean(filters.powerFrom),
+    filters.countryOrigin.length > 0,
+    filters.color.length > 0,
+    location.regions.length > 0,
+    Boolean(location.city),
+    Boolean(location.point),
+  ].filter(Boolean).length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -231,8 +259,8 @@ export function ListingsPage() {
       </div>
 
       <div className="bg-card space-y-4 rounded-xl border p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-56 flex-1 space-y-1.5">
+        <div className="flex items-end gap-3">
+          <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-56">
             <Label htmlFor="q">Szukaj</Label>
             <div className="relative">
               <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
@@ -246,13 +274,35 @@ export function ListingsPage() {
             </div>
           </div>
 
+          {/* Only below `sm` - the panel underneath is always open at `sm`+. */}
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 sm:hidden"
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            <SlidersHorizontalIcon />
+            Filtry
+            {activeFilterCount > 0 ? (
+              <Badge className="px-1.5">{activeFilterCount}</Badge>
+            ) : null}
+          </Button>
+        </div>
+
+        <div
+          className={cn(
+            'grid grid-cols-2 gap-3',
+            'sm:flex sm:flex-wrap sm:items-end',
+            filtersOpen ? 'grid' : 'hidden sm:flex',
+          )}
+        >
           <div className="space-y-1.5">
             <Label>Grupa</Label>
             <Select
               value={filters.groupId}
               onValueChange={(v) => update('groupId', v)}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Wszystkie grupy" />
               </SelectTrigger>
               <SelectContent>
@@ -266,7 +316,7 @@ export function ListingsPage() {
             </Select>
           </div>
 
-          <div className="w-44 space-y-1.5">
+          <div className="space-y-1.5 sm:w-44">
             <Label>Serwis</Label>
             <MultiCombobox
               options={providerOptions}
@@ -276,7 +326,7 @@ export function ListingsPage() {
             />
           </div>
 
-          <div className="w-44 space-y-1.5">
+          <div className="space-y-1.5 sm:w-44">
             <Label>Marka</Label>
             <Combobox
               options={makeOptions}
@@ -290,7 +340,7 @@ export function ListingsPage() {
             />
           </div>
 
-          <div className="w-44 space-y-1.5">
+          <div className="space-y-1.5 sm:w-44">
             <Label>Model</Label>
             <Combobox
               options={modelOptions}
@@ -302,7 +352,7 @@ export function ListingsPage() {
             />
           </div>
 
-          <div className="w-40 space-y-1.5">
+          <div className="space-y-1.5 sm:w-40">
             <Label>Zarchiwizowane</Label>
             <Select
               value={filters.archived}
@@ -322,7 +372,7 @@ export function ListingsPage() {
           <div className="space-y-1.5">
             <Label>Sortowanie</Label>
             <Select value={filters.sort} onValueChange={(v) => update('sort', v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -334,16 +384,14 @@ export function ListingsPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label>Paliwo</Label>
             <Select
               value={filters.fuelType}
               onValueChange={(v) => update('fuelType', v)}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="Dowolne" />
               </SelectTrigger>
               <SelectContent>
@@ -363,7 +411,7 @@ export function ListingsPage() {
               value={filters.gearbox}
               onValueChange={(v) => update('gearbox', v)}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="Dowolna" />
               </SelectTrigger>
               <SelectContent>
@@ -399,7 +447,7 @@ export function ListingsPage() {
             }}
           />
 
-          <div className="w-44 space-y-1.5">
+          <div className="space-y-1.5 sm:w-44">
             <Label>Kraj pochodzenia</Label>
             <MultiCombobox
               options={countryOptions}
@@ -419,7 +467,7 @@ export function ListingsPage() {
               value={filters.bodyType}
               onValueChange={(v) => update('bodyType', v)}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Dowolne" />
               </SelectTrigger>
               <SelectContent>
@@ -433,7 +481,7 @@ export function ListingsPage() {
             </Select>
           </div>
 
-          <div className="w-40 space-y-1.5">
+          <div className="space-y-1.5 sm:w-40">
             <Label>Kolor</Label>
             <MultiCombobox
               options={colorOptions}
@@ -472,6 +520,7 @@ export function ListingsPage() {
             <Button
               variant="ghost"
               size="sm"
+              className="col-span-2 sm:col-span-1"
               onClick={() => {
                 void navigate({ to: '/listings', search: {}, replace: true });
                 setPage(1);
@@ -551,7 +600,7 @@ function NumberField({
       <Input
         type="number"
         inputMode="numeric"
-        className="w-32"
+        className="w-full sm:w-32"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

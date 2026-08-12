@@ -448,6 +448,8 @@ Nakładające się przebiegi crona są pomijane, nie kolejkowane.
 | `GET`    | `/api/listings`                           | wyszukiwanie z filtrami i paginacją     |
 | `GET`    | `/api/listings/stats`                     | statystyki                              |
 | `GET`    | `/api/listings/:id`                       | szczegóły + historia cen                |
+| `GET`    | `/api/listings/recently-viewed`           | ostatnio kliknięte oferty                |
+| `POST`   | `/api/listings/:id/view`                  | rejestracja kliknięcia „Oferta”         |
 | `PUT`    | `/api/listings/:id/favorite`              | dodanie do ulubionych                   |
 | `DELETE` | `/api/listings/:id/favorite`              | usunięcie z ulubionych                  |
 | `GET`    | `/api/favorites`                          | lista ulubionych                        |
@@ -461,6 +463,38 @@ Nakładające się przebiegi crona są pomijane, nie kolejkowane.
 | `GET`    | `/api/taxonomy/makes`                     | same marki (lżejsza odpowiedź)          |
 | `GET`    | `/api/taxonomy/makes/:make/models`        | modele danej marki                      |
 | `GET`    | `/api/providers`                          | status źródeł danych                    |
+| `GET`    | `/api/admin/stats`                        | statystyki całej instalacji (admin)     |
+| `GET`    | `/api/admin/users`                        | lista kont (admin)                      |
+| `PATCH`  | `/api/admin/users/:id`                    | rola / blokada konta (admin)            |
+| `GET`    | `/api/admin/scrapers`                     | dostawcy + stan przełącznika (admin)    |
+| `POST`   | `/api/admin/scrapers/:host/reset`         | ręczny reset przełącznika (admin)       |
+| `GET`    | `/api/admin/runs`                         | historia pobrań wszystkich kont (admin) |
+
+## Panel admina
+
+Rola `admin` siedziała w schemacie od pierwszego szkieletu projektu, ale bez
+UI — `requireRole('admin')` middleware istniał, nieużywany. Teraz jest
+podpięty pod `/api/admin/*` i `/admin` w froncie (link w nawigacji widoczny
+tylko dla admina; wejście na `/admin` bez tej roli przekierowuje na `/`).
+
+Cztery zakładki:
+- **Przegląd** — konta, ogłoszenia wg serwisu, stan harmonogramu.
+- **Użytkownicy** — rola i blokada konta. Nie da się zmienić własnej roli ani
+  zablokować samego siebie (guard w `admin.service.ts`), a odebranie roli
+  ostatniemu adminowi jest zablokowane — nie ma komu jej z powrotem nadać.
+  Zablokowane konto dostaje `401` przy logowaniu z czytelnym powodem.
+- **Scrapery** — stan każdego adaptera (`GET /api/providers` z resztą
+  kontekstu) plus **przełącznik (circuit breaker)**: który host jest właśnie
+  wstrzymany po serii 403 i do kiedy, z przyciskiem ręcznego resetu
+  (`ScrapingClient.getCircuitStatus()`/`resetCircuit()` w
+  [`http-client.ts`](apps/api/src/providers/scraping/http-client.ts) — do
+  teraz ten stan siedział tylko w pamięci procesu, bez żadnego wglądu z
+  zewnątrz).
+- **Historia pobrań** — `fetch_runs` całej instalacji, nie tylko własnych grup
+  (`listRuns` w `filters.service.ts` zostaje per-user; to osobna funkcja).
+
+Seed (`db:seed`) tworzy teraz konto demo od razu jako `admin` — to appka
+jednoosobowa, nie ma sensu chować tego za ręczną zmianą w bazie.
 
 ## Porównywarka, historia cen i wskaźnik dobrej ceny
 
@@ -484,6 +518,19 @@ Nakładające się przebiegi crona są pomijane, nie kolejkowane.
   dopiero przy ≥5 porównywalnych ofertach (mniej = szum, nie sygnał) i ≥10%
   poniżej mediany. Indeks `listings_market_cohort_idx` (make, model, year,
   mileage_km) trzyma to szybkie.
+- **Ostatnio oglądane** (`/recently-viewed`) — rejestruje się **kliknięcie
+  linku do serwisu źródłowego**, nie samo wyrenderowanie karty. `POST
+  /api/listings/:id/view` upsertuje wiersz w `listing_views` (klucz
+  `(user_id, listing_id)`) — kolejne kliknięcie tej samej oferty podbija
+  `viewed_at`/`view_count` zamiast dokładać duplikat, więc lista czyta się
+  jak stos różnych aut, nie log kliknięć. Podpięte pod **każde** miejsce z
+  linkiem na zewnątrz: obie karty (zdjęcie + przycisk „Oferta”),
+  porównywarka, dzwonek powiadomień i strona powiadomień — pięć miejsc,
+  jeden hook (`useTrackListingView`). Zapytanie dzieli komplet
+  kolumn/podzapytań (`isFavorite`, `groups`, `priceChangePct`,
+  `priceVsMarketPct`) z wyszukiwarką przez wspólną `listingColumns()` w
+  [`listings.service.ts`](apps/api/src/modules/listings/listings.service.ts) —
+  jedna karta obsługuje obie listy, bez rozjazdu pól.
 
 ## Powiadomienia e-mail i push
 

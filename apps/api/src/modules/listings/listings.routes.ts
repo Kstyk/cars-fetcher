@@ -10,6 +10,7 @@ import {
   favoriteInputSchema,
   listingIdParam,
   listingQuerySchema,
+  recentlyViewedQuery,
   type ListingQuery,
 } from './listings.schemas.js';
 import * as service from './listings.service.js';
@@ -46,10 +47,28 @@ listingsRouter.get(
 );
 
 listingsRouter.get(
+  '/recently-viewed',
+  validate(recentlyViewedQuery, 'query'),
+  asyncHandler(async (req, res) => {
+    const { limit } = req.query as unknown as { limit: number };
+    res.json(await service.listRecentlyViewed(currentUserId(req), limit));
+  }),
+);
+
+listingsRouter.get(
   '/:id',
   validate(listingIdParam, 'params'),
   asyncHandler(async (req, res) => {
     res.json(await service.getListing(currentUserId(req), pathParam(req, 'id')));
+  }),
+);
+
+listingsRouter.post(
+  '/:id/view',
+  validate(listingIdParam, 'params'),
+  asyncHandler(async (req, res) => {
+    await service.recordListingView(currentUserId(req), pathParam(req, 'id'));
+    res.status(204).send();
   }),
 );
 

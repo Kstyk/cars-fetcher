@@ -13,6 +13,7 @@ import {
   filterIdParam,
   filterInputSchema,
   groupIdParam,
+  mergeGroupsSchema,
   updateGroupSchema,
 } from './filters.schemas.js';
 import * as service from './filters.service.js';
@@ -64,6 +65,21 @@ filterGroupsRouter.delete(
   }),
 );
 
+filterGroupsRouter.post(
+  '/:id/merge',
+  validate(groupIdParam, 'params'),
+  validate(mergeGroupsSchema),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await service.mergeGroups(
+        currentUserId(req),
+        pathParam(req, 'id'),
+        req.body.sourceGroupIds,
+      ),
+    );
+  }),
+);
+
 /* ------------------------------- filters --------------------------------- */
 
 filterGroupsRouter.post(
@@ -103,6 +119,14 @@ filterGroupsRouter.delete(
       pathParam(req, 'filterId'),
     );
     res.status(204).send();
+  }),
+);
+
+filterGroupsRouter.post(
+  '/:id/clean-matches',
+  validate(groupIdParam, 'params'),
+  asyncHandler(async (req, res) => {
+    res.json(await service.removeStaleMatches(currentUserId(req), pathParam(req, 'id')));
   }),
 );
 

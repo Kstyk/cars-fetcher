@@ -88,7 +88,7 @@ export function LocationFilter({
 
   return (
     <>
-      <div className="w-44 space-y-1.5">
+      <div className="space-y-1.5 sm:w-44">
         <Label>Województwo</Label>
         <MultiCombobox
           options={VOIVODESHIPS.map((region) => ({ value: region, label: region }))}
@@ -98,7 +98,7 @@ export function LocationFilter({
         />
       </div>
 
-      <div className="w-44 space-y-1.5">
+      <div className="space-y-1.5 sm:w-44">
         <Label>Miasto</Label>
         <Combobox
           options={cityOptions}
@@ -110,7 +110,7 @@ export function LocationFilter({
         />
       </div>
 
-      <div className="w-36 space-y-1.5">
+      <div className="space-y-1.5 sm:w-36">
         <Label>Promień</Label>
         <Select
           value={value.radiusKm === null ? NO_RADIUS : String(value.radiusKm)}

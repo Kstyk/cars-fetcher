@@ -1,17 +1,21 @@
+import { Link } from '@tanstack/react-router';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   BadgePercentIcon,
   CarFrontIcon,
   ExternalLinkIcon,
+  FingerprintIcon,
   FuelIcon,
   GaugeIcon,
   GlobeIcon,
   HeartIcon,
+  HourglassIcon,
   ImageOffIcon,
   LineChartIcon,
   MapPinIcon,
   SettingsIcon,
+  TagIcon,
   ZapIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -26,6 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PriceHistoryChart } from '@/components/price-history-chart';
+import { SellerDialog } from '@/components/seller-dialog';
 import { COMPARE_LIMIT, useCompare } from '@/lib/compare';
 import {
   FUEL_LABELS,
@@ -39,9 +44,18 @@ import {
   formatRelative,
   label,
 } from '@/lib/format';
-import { useListingDetail, useToggleFavorite } from '@/lib/queries';
+import { useListingDetail, useToggleFavorite, useTrackListingView } from '@/lib/queries';
 import type { Listing } from '@/lib/types';
 import { cn } from '@/lib/utils';
+
+/** Notably longer on the market than similar cars that already sold - not just "old". */
+function isStaleListing(listing: Listing): boolean {
+  return (
+    listing.medianDaysToSellCohort !== null &&
+    listing.daysListed >= 21 &&
+    listing.daysListed > listing.medianDaysToSellCohort * 2
+  );
+}
 
 /**
  * We store no car details of our own - the card links straight to the
@@ -49,15 +63,18 @@ import { cn } from '@/lib/utils';
  */
 export function ListingCard({ listing }: { listing: Listing }) {
   const toggleFavorite = useToggleFavorite();
+  const trackView = useTrackListingView();
   const compare = useCompare();
   const [imageFailed, setImageFailed] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sellerOpen, setSellerOpen] = useState(false);
   const compareSelected = compare.isSelected(listing.id);
 
   // Dates shown to the user are the marketplace's, not our fetch time.
   // `firstSeenAt` is the fallback for providers that do not publish one.
   const publishedAt = listing.publishedAt ?? listing.firstSeenAt;
   const isFresh = Date.now() - new Date(publishedAt).getTime() < 24 * 3_600_000;
+  const stale = isStaleListing(listing);
 
   return (
     <Card className="group relative gap-0 overflow-hidden pt-0 transition-shadow hover:shadow-md">
@@ -66,6 +83,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
         target="_blank"
         rel="noopener noreferrer"
         className="bg-muted relative block aspect-4/3 overflow-hidden"
+        onClick={() => trackView.mutate(listing.id)}
       >
         {listing.thumbnailUrl && !imageFailed ? (
           <img
@@ -130,6 +148,16 @@ export function ListingCard({ listing }: { listing: Listing }) {
             >
               <BadgePercentIcon />
               {Math.abs(listing.priceVsMarketPct).toFixed(0)}% poniżej rynku
+            </Badge>
+          ) : null}
+          {stale ? (
+            <Badge
+              variant="outline"
+              className="gap-1"
+              title={`${listing.daysListed} dni na rynku - podobne auta zwykle sprzedają się w ok. ${listing.medianDaysToSellCohort} dni. Może warto negocjować.`}
+            >
+              <HourglassIcon />
+              Długo na rynku
             </Badge>
           ) : null}
         </div>
@@ -212,6 +240,35 @@ export function ListingCard({ listing }: { listing: Listing }) {
         </p>
       </div>
 
+      {/* The same car, still live elsewhere - see the API doc comment on `mergedIntoId`. */}
+      {listing.duplicates.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5 px-5 pt-2 text-xs">
+          <span className="text-muted-foreground">Też na:</span>
+          {listing.duplicates.map((dup) => (
+            <Badge
+              key={dup.id}
+              asChild
+              className="border-transparent text-white"
+              style={{ backgroundColor: PROVIDER_COLORS[dup.provider] ?? '#475569' }}
+            >
+              <a
+                href={dup.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackView.mutate(dup.id)}
+              >
+                {label(PROVIDER_LABELS, dup.provider)}
+                {dup.price !== null ? (
+                  <span className="data-figure opacity-90">
+                    {formatPrice(dup.price, listing.currency)}
+                  </span>
+                ) : null}
+              </a>
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+
       <dl className="text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 px-5 pt-4 text-sm">
         <Spec icon={<GaugeIcon />} value={formatMileage(listing.mileageKm)} mono />
         <Spec icon={<FuelIcon />} value={label(FUEL_LABELS, listing.fuelType)} />
@@ -247,10 +304,30 @@ export function ListingCard({ listing }: { listing: Listing }) {
           // Exact dates on hover: when the advert went up, and when we saw it.
           title={`Wystawiono: ${formatDateTime(publishedAt)}\nPobrano: ${formatDateTime(listing.firstSeenAt)}`}
         >
-          {listing.sellerName ?? label(SELLER_LABELS, listing.sellerType)} ·{' '}
-          {formatRelative(publishedAt)}
+          {listing.sellerName ? (
+            <button
+              type="button"
+              className="hover:text-foreground underline decoration-dotted underline-offset-2"
+              onClick={(event) => {
+                event.preventDefault();
+                setSellerOpen(true);
+              }}
+            >
+              {listing.sellerName}
+            </button>
+          ) : (
+            label(SELLER_LABELS, listing.sellerType)
+          )}{' '}
+          · {formatRelative(publishedAt)}
         </span>
         <div className="flex shrink-0 items-center gap-2">
+          {listing.vin ? (
+            <Button asChild size="icon" variant="outline" aria-label="Sprawdź VIN" title="Sprawdź VIN">
+              <Link to="/vin" search={{ vin: listing.vin }}>
+                <FingerprintIcon />
+              </Link>
+            </Button>
+          ) : null}
           <Button
             size="icon"
             variant="outline"
@@ -261,7 +338,12 @@ export function ListingCard({ listing }: { listing: Listing }) {
             <LineChartIcon />
           </Button>
           <Button asChild size="sm" variant="outline">
-            <a href={listing.url} target="_blank" rel="noopener noreferrer">
+            <a
+              href={listing.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackView.mutate(listing.id)}
+            >
               Oferta
               <ExternalLinkIcon />
             </a>
@@ -272,25 +354,86 @@ export function ListingCard({ listing }: { listing: Listing }) {
       <PriceHistoryDialog
         listingId={listing.id}
         title={listing.title}
+        price={listing.price}
+        currency={listing.currency}
+        priceVsMarketPct={listing.priceVsMarketPct}
+        daysListed={listing.daysListed}
+        medianDaysToSellCohort={listing.medianDaysToSellCohort}
         open={historyOpen}
         onOpenChange={setHistoryOpen}
       />
+
+      {listing.sellerName ? (
+        <SellerDialog sellerName={listing.sellerName} open={sellerOpen} onOpenChange={setSellerOpen} />
+      ) : null}
     </Card>
   );
+}
+
+/**
+ * A transparent, explainable heuristic, not a guarantee - shown with its own
+ * reasoning so it reads as "here's why", not as an oracle. Two inputs:
+ * how far above the market median the asking price sits, and whether the ad
+ * has been up longer than similar cars usually take to sell (more room to
+ * negotiate on both counts).
+ */
+function suggestOffer(
+  price: number,
+  priceVsMarketPct: number | null,
+  daysListed: number,
+  medianDaysToSellCohort: number | null,
+): { discountPct: number; suggested: number; reasons: string[] } | null {
+  if (price <= 0) return null;
+
+  const reasons: string[] = [];
+  let discountPct = 3; // baseline haggling room on almost any asking price
+
+  if (priceVsMarketPct !== null && priceVsMarketPct > 0) {
+    const fromMarket = Math.min(priceVsMarketPct / 2, 15);
+    discountPct += fromMarket;
+    reasons.push(`Cena ${priceVsMarketPct.toFixed(0)}% powyżej mediany podobnych ofert.`);
+  }
+
+  const stale =
+    medianDaysToSellCohort !== null && daysListed >= 21 && daysListed > medianDaysToSellCohort * 2;
+  if (stale) {
+    discountPct += 3;
+    reasons.push(
+      `${daysListed} dni na rynku - podobne auta zwykle sprzedają się w ok. ${medianDaysToSellCohort} dni.`,
+    );
+  }
+
+  discountPct = Math.min(discountPct, 20);
+  if (reasons.length === 0) {
+    reasons.push('Cena już zbliżona do rynkowej - zostaje tylko standardowy margines na negocjacje.');
+  }
+
+  return { discountPct, suggested: Math.round((price * (1 - discountPct / 100)) / 100) * 100, reasons };
 }
 
 function PriceHistoryDialog({
   listingId,
   title,
+  price,
+  currency,
+  priceVsMarketPct,
+  daysListed,
+  medianDaysToSellCohort,
   open,
   onOpenChange,
 }: {
   listingId: string;
   title: string;
+  price: number | null;
+  currency: string;
+  priceVsMarketPct: number | null;
+  daysListed: number;
+  medianDaysToSellCohort: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const detail = useListingDetail(listingId, { enabled: open });
+  const offer = price !== null ? suggestOffer(price, priceVsMarketPct, daysListed, medianDaysToSellCohort) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -307,6 +450,29 @@ function PriceHistoryDialog({
             Nie udało się wczytać historii ceny.
           </p>
         )}
+
+        {offer ? (
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <TagIcon className="size-4" />
+              Sugerowana oferta:{' '}
+              <span className="data-figure">{formatPrice(offer.suggested, currency)}</span>
+              <span className="text-muted-foreground font-normal">
+                (-{offer.discountPct.toFixed(0)}%)
+              </span>
+            </p>
+            <ul className="text-muted-foreground list-disc space-y-0.5 pl-5 text-xs">
+              {offer.reasons.map((reason, i) => (
+                <li key={i}>{reason}</li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground text-xs italic">
+              Punkt wyjścia do rozmowy, nie gwarancja - ostateczna cena zależy od stanu auta i
+              sprzedawcy.
+            </p>
+          </div>
+        ) : null}
+
         <p className="text-muted-foreground truncate text-xs" title={title}>
           {title}
         </p>

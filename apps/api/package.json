@@ -21,7 +21,8 @@
     "geo:backfill": "tsx --env-file=../../.env src/scripts/backfill-geo.ts",
     "findcar:test": "tsx --env-file=../../.env src/scripts/test-findcar.ts",
     "sprzedajemy:test": "tsx --env-file=../../.env src/scripts/test-sprzedajemy.ts",
-    "push:generate-keys": "tsx src/scripts/generate-vapid-keys.ts"
+    "push:generate-keys": "tsx src/scripts/generate-vapid-keys.ts",
+    "knowledge:seed": "tsx --env-file=../../.env src/scripts/seed-knowledge.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
