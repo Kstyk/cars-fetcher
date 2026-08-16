@@ -5,6 +5,7 @@ import {
   EraserIcon,
   Loader2Icon,
   PencilIcon,
+  PencilRulerIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -18,11 +19,13 @@ import {
   toFilterPayload,
   type FilterFormValue,
 } from '@/components/filter-form';
+import { BulkEditFiltersDialog } from '@/components/bulk-edit-filters-dialog';
 import { EditGroupDialog } from '@/components/edit-group-dialog';
 import { ListingCard } from '@/components/listing-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +87,14 @@ export function GroupDetailPage() {
   const [filterDraft, setFilterDraft] = useState<FilterFormValue>(EMPTY_FILTER_FORM);
   const [editingFilterId, setEditingFilterId] = useState<string | null>(null);
   const [isCopy, setIsCopy] = useState(false);
+  const [selectedFilterIds, setSelectedFilterIds] = useState<string[]>([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+
+  function toggleFilterSelection(id: string): void {
+    setSelectedFilterIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   function openFilterDialog(
     draft: FilterFormValue,
@@ -239,9 +250,42 @@ export function GroupDetailPage() {
               Wyczyść nieaktualne
             </Button>
           </div>
+
+          {group.data.filters.length > 1 ? (
+            <div className="flex items-center justify-between gap-3 px-1">
+              <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-xs">
+                <Checkbox
+                  checked={
+                    selectedFilterIds.length > 0 &&
+                    selectedFilterIds.length === group.data.filters.length
+                  }
+                  onCheckedChange={(state) =>
+                    setSelectedFilterIds(state === true ? group.data.filters.map((f) => f.id) : [])
+                  }
+                />
+                Zaznacz wszystkie
+                {selectedFilterIds.length > 0 ? ` (${selectedFilterIds.length})` : ''}
+              </label>
+              {selectedFilterIds.length > 0 ? (
+                <Button variant="outline" size="sm" onClick={() => setBulkEditOpen(true)}>
+                  <PencilRulerIcon />
+                  Edytuj zbiorczo
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
           {group.data.filters.map((filter) => (
             <Card key={filter.id}>
               <CardContent className="flex flex-wrap items-start justify-between gap-4 py-4">
+                {group.data.filters.length > 1 ? (
+                  <Checkbox
+                    className="mt-1"
+                    checked={selectedFilterIds.includes(filter.id)}
+                    onCheckedChange={() => toggleFilterSelection(filter.id)}
+                    aria-label={`Zaznacz filtr ${filter.name ?? ''}`}
+                  />
+                ) : null}
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="font-medium">
                     {filter.name ??
@@ -442,6 +486,15 @@ export function GroupDetailPage() {
         group={group.data}
         open={editGroupOpen}
         onOpenChange={setEditGroupOpen}
+      />
+
+      <BulkEditFiltersDialog
+        groupId={groupId}
+        filters={group.data.filters}
+        selectedIds={selectedFilterIds}
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        onDone={() => setSelectedFilterIds([])}
       />
     </div>
   );

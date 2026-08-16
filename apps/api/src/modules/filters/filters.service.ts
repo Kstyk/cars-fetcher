@@ -338,6 +338,11 @@ export async function deleteFilter(
  * listing left with no match anywhere (this was its only one) simply stops
  * showing up anywhere in the app, which is the point - it is not "sold", so
  * it must not carry that badge.
+ *
+ * Soft-delete (`removedAt`), not a real `DELETE`: history that depends on
+ * "was this ever matched" - the dashboard's sold-by-model report, chiefly -
+ * must not be able to shrink retroactively just because a filter got tuned
+ * and this ran. See the `removedAt` doc comment on `listingMatches`.
  */
 export async function removeStaleMatches(
   userId: string,
@@ -350,6 +355,7 @@ export async function removeStaleMatches(
     .from(filters)
     .where(eq(filters.groupId, groupId));
 
+  const now = new Date();
   let removed = 0;
   for (const filter of groupFilters) {
     const stillMatching = db
@@ -358,10 +364,12 @@ export async function removeStaleMatches(
       .where(buildFilterMatchCondition(filter));
 
     const dropped = await db
-      .delete(listingMatches)
+      .update(listingMatches)
+      .set({ removedAt: now })
       .where(
         and(
           eq(listingMatches.filterId, filter.id),
+          isNull(listingMatches.removedAt),
           notInArray(listingMatches.listingId, stillMatching),
         ),
       )
@@ -371,8 +379,15 @@ export async function removeStaleMatches(
   }
 
   const orphaned = await db
-    .delete(listingMatches)
-    .where(and(eq(listingMatches.groupId, groupId), isNull(listingMatches.filterId)))
+    .update(listingMatches)
+    .set({ removedAt: now })
+    .where(
+      and(
+        eq(listingMatches.groupId, groupId),
+        isNull(listingMatches.filterId),
+        isNull(listingMatches.removedAt),
+      ),
+    )
     .returning({ listingId: listingMatches.listingId });
   removed += orphaned.length;
 

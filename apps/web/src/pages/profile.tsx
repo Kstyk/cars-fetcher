@@ -1,4 +1,10 @@
-import { CheckCircle2Icon, Loader2Icon, MailWarningIcon } from 'lucide-react';
+import {
+  CheckCircle2Icon,
+  Link2OffIcon,
+  Loader2Icon,
+  MailWarningIcon,
+  SendIcon,
+} from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +37,8 @@ import {
   useChangePassword,
   useNotificationPreferences,
   useResendVerification,
+  useTelegramStatus,
+  useUnlinkTelegram,
   useUpdatePreferences,
   useUpdateProfile,
 } from '@/lib/queries';
@@ -352,6 +360,10 @@ function NotificationPreferencesCard() {
               {pushError}
             </p>
           ) : null}
+          <TelegramChannelRow
+            enabled={draft.telegramEnabled}
+            onToggle={(v) => patch({ telegramEnabled: v })}
+          />
         </section>
 
         <Separator />
@@ -364,6 +376,12 @@ function NotificationPreferencesCard() {
             label="Nowe ogłoszenia"
             checked={draft.notifyNewListing}
             onChange={(v) => patch({ notifyNewListing: v })}
+          />
+          <ToggleRow
+            label="Okazje"
+            description={`Nowa oferta co najmniej ${draft.goodDealThresholdPct}% poniżej mediany rynkowej`}
+            checked={draft.notifyGoodDeal}
+            onChange={(v) => patch({ notifyGoodDeal: v })}
           />
           <ToggleRow
             label="Spadki cen"
@@ -425,6 +443,24 @@ function NotificationPreferencesCard() {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="good-deal-threshold">Próg okazji (% poniżej rynku)</Label>
+            <Input
+              id="good-deal-threshold"
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={draft.goodDealThresholdPct}
+              onChange={(e) =>
+                setDraft({ ...draft, goodDealThresholdPct: Number(e.target.value) })
+              }
+              onBlur={(e) =>
+                patch({ goodDealThresholdPct: Number(e.target.value) })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label>Cisza nocna od</Label>
             <Select
               value={draft.quietHoursStart === null ? NONE : String(draft.quietHoursStart)}
@@ -470,6 +506,96 @@ function NotificationPreferencesCard() {
         </section>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Telegram can't be a plain toggle like push/e-mail - it needs a one-time
+ * `/start` handshake in the Telegram app first (see `modules/telegram` on
+ * the API). Shows a "Połącz" button while unlinked, polling the status
+ * every few seconds so the row flips to the toggle+"Odłącz" state on its
+ * own the moment the user taps Start in Telegram - no manual refresh.
+ */
+function TelegramChannelRow({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (value: boolean) => void;
+}) {
+  const [linking, setLinking] = useState(false);
+  const status = useTelegramStatus(linking);
+  const unlink = useUnlinkTelegram();
+
+  useEffect(() => {
+    if (status.data?.linked) setLinking(false);
+  }, [status.data?.linked]);
+
+  if (!status.data) {
+    return <Skeleton className="h-14" />;
+  }
+
+  if (!status.data.configured) {
+    return (
+      <div className="rounded-lg border px-3 py-2.5">
+        <p className="text-sm font-medium">Telegram</p>
+        <p className="text-muted-foreground text-xs">
+          Bot nie jest skonfigurowany na serwerze (brak TELEGRAM_BOT_TOKEN).
+        </p>
+      </div>
+    );
+  }
+
+  if (!status.data.linked) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+        <div>
+          <p className="text-sm font-medium">Telegram</p>
+          <p className="text-muted-foreground text-xs">
+            {linking
+              ? 'Czekam na potwierdzenie w Telegramie…'
+              : 'Połącz konto, żeby dostawać powiadomienia na Telegramie.'}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!status.data.deepLink}
+          onClick={() => {
+            if (status.data?.deepLink) window.open(status.data.deepLink, '_blank');
+            setLinking(true);
+          }}
+        >
+          {linking ? <Loader2Icon className="animate-spin" /> : <SendIcon />}
+          {linking ? 'Czekam…' : 'Połącz z Telegramem'}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+      <div>
+        <p className="text-sm font-medium">Telegram</p>
+        <p className="text-muted-foreground text-xs">
+          {status.data.username ? `Połączono jako @${status.data.username}` : 'Połączono'}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch checked={enabled} onCheckedChange={onToggle} />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          title="Odłącz Telegram"
+          disabled={unlink.isPending}
+          onClick={() => unlink.mutate()}
+        >
+          <Link2OffIcon className="size-4" />
+        </Button>
+      </div>
+    </div>
   );
 }
 

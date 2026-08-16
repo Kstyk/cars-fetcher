@@ -19,11 +19,16 @@ const preferencesSchema = z.object({
   emailEnabled: z.boolean().optional(),
   pushEnabled: z.boolean().optional(),
   inAppEnabled: z.boolean().optional(),
+  // chatId/username/token are only ever set by the Telegram link handshake
+  // (see modules/telegram) - this generic endpoint may only flip the toggle.
+  telegramEnabled: z.boolean().optional(),
   notifyNewListing: z.boolean().optional(),
+  notifyGoodDeal: z.boolean().optional(),
   notifyPriceDrop: z.boolean().optional(),
   notifyListingRemoved: z.boolean().optional(),
   notifyFetchFailed: z.boolean().optional(),
   priceDropThresholdPct: z.number().min(0).max(100).optional(),
+  goodDealThresholdPct: z.number().min(0).max(100).optional(),
   digestFrequency: z
     .enum(['instant', 'hourly', 'daily', 'weekly', 'off'])
     .optional(),

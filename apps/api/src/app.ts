@@ -16,7 +16,9 @@ import {
 } from './modules/listings/listings.routes.js';
 import { notificationsRouter } from './modules/notifications/notifications.routes.js';
 import { sellersRouter } from './modules/sellers/sellers.routes.js';
+import { usageStatsRouter } from './modules/stats/usage-stats.routes.js';
 import { taxonomyRouter } from './modules/taxonomy/taxonomy.routes.js';
+import { telegramRouter } from './modules/telegram/telegram.routes.js';
 import { vinRouter } from './modules/vin/vin.routes.js';
 import { listProviders } from './providers/registry.js';
 
@@ -58,6 +60,8 @@ export function createApp() {
   app.use('/api/knowledge', knowledgeRouter);
   app.use('/api/vin', vinRouter);
   app.use('/api/sellers', sellersRouter);
+  app.use('/api/stats', usageStatsRouter);
+  app.use('/api/telegram', telegramRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

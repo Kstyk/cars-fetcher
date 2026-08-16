@@ -23,7 +23,9 @@ import type {
   ProviderInfo,
   Taxonomy,
   User,
+  FilterUsageStat,
   SellerProfile,
+  TelegramLinkStatus,
   VehicleHistoryReport,
   VehicleModelDetail,
   VehicleModelSummary,
@@ -43,6 +45,7 @@ export const queryKeys = {
     ['notifications', params] as const,
   unreadCount: ['notifications', 'unread-count'] as const,
   preferences: ['notifications', 'preferences'] as const,
+  telegramStatus: ['telegram', 'status'] as const,
 };
 
 /* -------------------------------- Taxonomy -------------------------------- */
@@ -353,6 +356,32 @@ export function useUpdatePreferences() {
   });
 }
 
+/* --------------------------------- Telegram -------------------------------- */
+
+/**
+ * `pollWhileLinking` should be true only while the user has an open deep
+ * link waiting for the /start handshake to land - refetching every few
+ * seconds is how the profile page notices the link went through without
+ * the user having to manually refresh.
+ */
+export function useTelegramStatus(pollWhileLinking: boolean) {
+  return useQuery({
+    queryKey: queryKeys.telegramStatus,
+    queryFn: () => api.get<TelegramLinkStatus>('/api/telegram/status'),
+    refetchInterval: pollWhileLinking ? 3000 : false,
+  });
+}
+
+export function useUnlinkTelegram() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/api/telegram/unlink'),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.telegramStatus });
+    },
+  });
+}
+
 /* --------------------------------- Profile -------------------------------- */
 
 export function useUpdateProfile() {
@@ -499,6 +528,13 @@ export function useFetchVehicleHistory() {
 }
 
 /* -------------------------------------------------------------------------- */
+
+export function useFilterUsageStats() {
+  return useQuery({
+    queryKey: ['stats', 'filters'],
+    queryFn: () => api.get<FilterUsageStat[]>('/api/stats/filters'),
+  });
+}
 
 export function useSellerProfile(name: string | null) {
   return useQuery({

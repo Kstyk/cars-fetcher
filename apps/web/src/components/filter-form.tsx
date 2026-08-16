@@ -6,13 +6,14 @@ import { Combobox, MultiCombobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label as FieldLabel } from '@/components/ui/label';
 import { Separator, Skeleton } from '@/components/ui/misc';
+import { VOIVODESHIPS } from '@/components/location-filter';
 import {
   BODY_LABELS,
   FUEL_LABELS,
   GEARBOX_LABELS,
   label,
 } from '@/lib/format';
-import { useProviders, useTaxonomy } from '@/lib/queries';
+import { useCities, useProviders, useTaxonomy } from '@/lib/queries';
 import type { BodyType, Filter, FuelType, Gearbox } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +43,9 @@ export interface FilterFormValue {
   bodyTypes: BodyType[];
   colors: string[];
   countryOrigin: string | null;
+  region: string | null;
+  city: string | null;
+  radiusKm: string;
   doorCounts: string[];
   seatCounts: string[];
   excludeDamaged: boolean;
@@ -72,6 +76,9 @@ export const EMPTY_FILTER_FORM: FilterFormValue = {
   bodyTypes: [],
   colors: [],
   countryOrigin: null,
+  region: null,
+  city: null,
+  radiusKm: '',
   doorCounts: [],
   seatCounts: [],
   excludeDamaged: true,
@@ -112,6 +119,9 @@ export function toFilterPayload(value: FilterFormValue): Record<string, unknown>
     bodyTypes: value.bodyTypes.length ? value.bodyTypes : null,
     colors: value.colors.length ? value.colors : null,
     countryOrigin: value.countryOrigin,
+    region: value.region,
+    city: value.city,
+    radiusKm: number(value.radiusKm),
     doorCounts: value.doorCounts.length ? value.doorCounts.map(Number) : null,
     seatCounts: value.seatCounts.length ? value.seatCounts.map(Number) : null,
     excludeDamaged: value.excludeDamaged,
@@ -150,6 +160,9 @@ export function filterToFormValue(filter: Filter): FilterFormValue {
     bodyTypes: filter.bodyTypes ?? [],
     colors: filter.colors ?? [],
     countryOrigin: filter.countryOrigin,
+    region: filter.region,
+    city: filter.city,
+    radiusKm: text(filter.radiusKm),
     doorCounts: (filter.doorCounts ?? []).map(String),
     seatCounts: (filter.seatCounts ?? []).map(String),
     excludeDamaged: filter.excludeDamaged,
@@ -270,15 +283,17 @@ export function FilterSummary({ filter }: { filter: Filter }) {
   );
 }
 
-const FUEL_OPTIONS = Object.entries(FUEL_LABELS).map(([value, label]) => ({
+// Exported so the bulk-edit dialog (patching one field across many filters
+// at once) can render the exact same option lists without redefining them.
+export const FUEL_OPTIONS = Object.entries(FUEL_LABELS).map(([value, label]) => ({
   value,
   label,
 }));
-const GEARBOX_OPTIONS = Object.entries(GEARBOX_LABELS).map(([value, label]) => ({
+export const GEARBOX_OPTIONS = Object.entries(GEARBOX_LABELS).map(([value, label]) => ({
   value,
   label,
 }));
-const BODY_OPTIONS = Object.entries(BODY_LABELS).map(([value, label]) => ({
+export const BODY_OPTIONS = Object.entries(BODY_LABELS).map(([value, label]) => ({
   value,
   label,
 }));
@@ -301,6 +316,16 @@ export function FilterForm({
 }) {
   const taxonomy = useTaxonomy();
   const providers = useProviders();
+  const cities = useCities();
+
+  const cityOptions = useMemo(() => {
+    const names = [...new Set((cities.data ?? []).map((entry) => entry.city))];
+    return names.map((name) => ({ value: name, label: name }));
+  }, [cities.data]);
+  const regionOptions = useMemo(
+    () => VOIVODESHIPS.map((r) => ({ value: r, label: r })),
+    [],
+  );
 
   function patch(update: Partial<FilterFormValue>): void {
     onChange({ ...value, ...update });
@@ -456,6 +481,42 @@ export function FilterForm({
               options={GEARBOX_OPTIONS}
               values={value.gearboxes}
               onChange={(v) => patch({ gearboxes: v as Gearbox[] })}
+            />
+          </Field>
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section
+        title="Lokalizacja"
+        description="Sam region, samo miasto, albo miasto z promieniem - dowolna kombinacja."
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Województwo">
+            <Combobox
+              options={regionOptions}
+              value={value.region}
+              placeholder="Dowolne"
+              onChange={(region) => patch({ region })}
+            />
+          </Field>
+          <Field label="Miasto">
+            <Combobox
+              options={cityOptions}
+              value={value.city}
+              placeholder="Dowolne"
+              emptyText="Brak znanych miast - wpisz kryteria, miasto pojawi się z wynikami"
+              onChange={(city) => patch({ city })}
+            />
+          </Field>
+          <Field label="Promień (km)">
+            <Input
+              type="number"
+              inputMode="numeric"
+              placeholder="np. 50"
+              value={value.radiusKm}
+              onChange={(e) => patch({ radiusKm: e.target.value })}
             />
           </Field>
         </div>

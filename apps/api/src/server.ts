@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { pool } from './db/client.js';
 import { startScheduler, stopScheduler } from './jobs/scheduler.js';
+import { startTelegramPolling, stopTelegramPolling } from './modules/telegram/telegram-link.service.js';
 import { closeBrowser } from './providers/scraping/browser-fetch.js';
 
 const app = createApp();
@@ -10,11 +11,13 @@ const app = createApp();
 const server = app.listen(env.PORT, () => {
   logger.info(`API listening on http://localhost:${env.PORT}`);
   startScheduler();
+  startTelegramPolling();
 });
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Shutting down');
   stopScheduler();
+  stopTelegramPolling();
 
   server.close(async () => {
     await closeBrowser();

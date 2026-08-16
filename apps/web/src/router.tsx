@@ -21,6 +21,7 @@ import { LoginPage, RegisterPage } from '@/pages/login';
 import { NotificationsPage } from '@/pages/notifications';
 import { ProfilePage } from '@/pages/profile';
 import { RecentlyViewedPage } from '@/pages/recently-viewed';
+import { UsageStatsPage } from '@/pages/usage-stats';
 import { VerifyEmailPage } from '@/pages/verify-email';
 import { VinPage } from '@/pages/vin';
 
@@ -261,6 +262,12 @@ const vinRoute = createRoute({
   component: VinPage,
 });
 
+const usageStatsRoute = createRoute({
+  getParentRoute: () => protectedLayoutRoute,
+  path: '/statystyki',
+  component: UsageStatsPage,
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => protectedLayoutRoute,
   path: '/profile',
@@ -299,6 +306,7 @@ const routeTree = rootRoute.addChildren([
     knowledgeRoute,
     knowledgeModelRoute,
     vinRoute,
+    usageStatsRoute,
     profileRoute,
     adminRoute,
   ]),

@@ -92,6 +92,7 @@ export const fetchStatusEnum = pgEnum('fetch_status', [
 
 export const notificationTypeEnum = pgEnum('notification_type', [
   'new_listing',
+  'good_deal',
   'price_drop',
   'price_raise',
   'listing_removed',
@@ -103,6 +104,7 @@ export const notificationChannelEnum = pgEnum('notification_channel', [
   'in_app',
   'email',
   'push',
+  'telegram',
 ]);
 
 export const digestFrequencyEnum = pgEnum('digest_frequency', [
@@ -187,38 +189,67 @@ export const refreshTokens = pgTable(
   ],
 );
 
-export const notificationPreferences = pgTable('notification_preferences', {
-  userId: uuid('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  emailEnabled: boolean('email_enabled').notNull().default(true),
-  pushEnabled: boolean('push_enabled').notNull().default(false),
-  inAppEnabled: boolean('in_app_enabled').notNull().default(true),
-  notifyNewListing: boolean('notify_new_listing').notNull().default(true),
-  notifyPriceDrop: boolean('notify_price_drop').notNull().default(true),
-  notifyListingRemoved: boolean('notify_listing_removed')
-    .notNull()
-    .default(false),
-  notifyFetchFailed: boolean('notify_fetch_failed').notNull().default(false),
-  /** Minimum price drop (percent) that is worth a notification. */
-  priceDropThresholdPct: numeric('price_drop_threshold_pct', {
-    precision: 5,
-    scale: 2,
-    mode: 'number',
-  })
-    .notNull()
-    .default(1),
-  digestFrequency: digestFrequencyEnum('digest_frequency')
-    .notNull()
-    .default('daily'),
-  /** Local-time window in which notifications are suppressed, e.g. 22 -> 7. */
-  quietHoursStart: smallint('quiet_hours_start'),
-  quietHoursEnd: smallint('quiet_hours_end'),
-  timezone: varchar('timezone', { length: 64 }).notNull().default('Europe/Warsaw'),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    emailEnabled: boolean('email_enabled').notNull().default(true),
+    pushEnabled: boolean('push_enabled').notNull().default(false),
+    inAppEnabled: boolean('in_app_enabled').notNull().default(true),
+    telegramEnabled: boolean('telegram_enabled').notNull().default(false),
+    /** Set once the user finishes the /start deep-link handshake - see `modules/telegram`. */
+    telegramChatId: varchar('telegram_chat_id', { length: 64 }),
+    /** Display-only ("Połączono jako @foo") - Telegram usernames are optional, so this can be null even when linked. */
+    telegramUsername: varchar('telegram_username', { length: 64 }),
+    /**
+     * One-time token embedded in the `https://t.me/<bot>?start=<token>` deep
+     * link, cleared the moment the bot's poll loop sees the matching `/start`
+     * message and fills in `telegramChatId` above. Never reused.
+     */
+    telegramLinkToken: varchar('telegram_link_token', { length: 64 }),
+    notifyNewListing: boolean('notify_new_listing').notNull().default(true),
+    notifyPriceDrop: boolean('notify_price_drop').notNull().default(true),
+    notifyListingRemoved: boolean('notify_listing_removed')
+      .notNull()
+      .default(false),
+    notifyFetchFailed: boolean('notify_fetch_failed').notNull().default(false),
+    /** Minimum price drop (percent) that is worth a notification. */
+    priceDropThresholdPct: numeric('price_drop_threshold_pct', {
+      precision: 5,
+      scale: 2,
+      mode: 'number',
+    })
+      .notNull()
+      .default(1),
+    /**
+     * "Okazja" alert: fires the moment a brand-new listing is ingested at
+     * `goodDealThresholdPct`+ below the market median for similar cars
+     * (same `priceVsMarketPct` cohort logic as the listing card badge) -
+     * unlike `notifyPriceDrop`, this doesn't wait for the price to move.
+     */
+    notifyGoodDeal: boolean('notify_good_deal').notNull().default(true),
+    goodDealThresholdPct: numeric('good_deal_threshold_pct', {
+      precision: 5,
+      scale: 2,
+      mode: 'number',
+    })
+      .notNull()
+      .default(15),
+    digestFrequency: digestFrequencyEnum('digest_frequency')
+      .notNull()
+      .default('daily'),
+    /** Local-time window in which notifications are suppressed, e.g. 22 -> 7. */
+    quietHoursStart: smallint('quiet_hours_start'),
+    quietHoursEnd: smallint('quiet_hours_end'),
+    timezone: varchar('timezone', { length: 64 }).notNull().default('Europe/Warsaw'),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex('notification_preferences_telegram_link_token_unique').on(t.telegramLinkToken)],
+);
 
 /** Web-push endpoints; one user can register several browsers/devices. */
 export const pushSubscriptions = pgTable(
@@ -556,6 +587,20 @@ export const listingMatches = pgTable(
       .notNull()
       .defaultNow(),
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
+    /**
+     * Soft-delete, set by `removeStaleMatches` ("Wyczyść nieaktualne") -
+     * deliberately never a hard `DELETE`. Every *live* scoping query (the
+     * listings feed, `listCities`, the `groups` badges on a card) filters
+     * `removedAt IS NULL`, so a removed match behaves exactly like a deleted
+     * one there. Historical reporting (`soldByModel`) does not filter on it
+     * at all: whether this car sold is a fact about the past that a later
+     * filter edit + cleanup must not be able to erase - see the dashboard's
+     * "Sprzedaż wg modelu" doc comment for the bug this prevents. Cleared
+     * back to `null` if a later fetch re-matches the same (listing, filter)
+     * pair - the ingest upsert un-removes on conflict, same one-way-until-
+     * re-confirmed idea as `isActive`/`deactivatedAt` on `listings` itself.
+     */
+    removedAt: timestamp('removed_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('listing_matches_listing_filter_unique').on(
@@ -651,6 +696,8 @@ export const notifications = pgTable(
     emailError: text('email_error'),
     pushSentAt: timestamp('push_sent_at', { withTimezone: true }),
     pushError: text('push_error'),
+    telegramSentAt: timestamp('telegram_sent_at', { withTimezone: true }),
+    telegramError: text('telegram_error'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

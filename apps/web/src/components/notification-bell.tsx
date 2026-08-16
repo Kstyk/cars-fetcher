@@ -4,6 +4,7 @@ import {
   BellIcon,
   CheckCheckIcon,
   ExternalLinkIcon,
+  FlameIcon,
   ListIcon,
   SparklesIcon,
   TrendingDownIcon,
@@ -30,6 +31,7 @@ import { cn } from '@/lib/utils';
 
 const ICONS: Record<Notification['type'], typeof BellIcon> = {
   new_listing: SparklesIcon,
+  good_deal: FlameIcon,
   price_drop: TrendingDownIcon,
   price_raise: TrendingDownIcon,
   listing_removed: XCircleIcon,
@@ -111,7 +113,9 @@ export function NotificationBell() {
                         'mt-0.5 size-4 shrink-0',
                         notification.type === 'fetch_failed'
                           ? 'text-destructive'
-                          : 'text-muted-foreground',
+                          : notification.type === 'good_deal'
+                            ? 'text-amber-500'
+                            : 'text-muted-foreground',
                       )}
                     />
                     <div className="min-w-0 flex-1">

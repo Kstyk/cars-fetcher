@@ -167,8 +167,9 @@ export function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold">Sprzedaż wg modelu</h2>
             <p className="text-muted-foreground text-sm">
-              Ogłoszenie, które zniknęło z serwisu, liczymy jako sprzedane.
-              Modele z jedną ofertą są pominięte.
+              Ogłoszenie, które zniknęło z serwisu, liczymy jako sprzedane. Modele z jedną ofertą
+              są pominięte. Kliknij liczbę sprzedanych, żeby zobaczyć konkretne ogłoszenia - ta
+              liczba jest historią i nie kurczy się, gdy później zmienisz kryteria filtra.
             </p>
           </div>
 
@@ -197,7 +198,24 @@ export function DashboardPage() {
                           {[row.make, row.model].filter(Boolean).join(' ')}
                         </td>
                         <td className="data-figure py-2 pr-4 text-right">{row.total}</td>
-                        <td className="data-figure py-2 pr-4 text-right">{row.sold}</td>
+                        <td className="data-figure py-2 pr-4 text-right">
+                          {row.sold > 0 ? (
+                            <Link
+                              to="/listings"
+                              search={{
+                                make: row.make ?? undefined,
+                                model: row.model ?? undefined,
+                                archived: 'yes',
+                              }}
+                              className="hover:underline"
+                              title="Zobacz konkretne sprzedane ogłoszenia"
+                            >
+                              {row.sold}
+                            </Link>
+                          ) : (
+                            row.sold
+                          )}
+                        </td>
                         <td className="py-2 pr-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {/* A bar reads faster than a bare percentage. */}

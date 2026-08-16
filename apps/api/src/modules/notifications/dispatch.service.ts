@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { emailConfigured, env, pushConfigured } from '../../config/env.js';
+import { emailConfigured, env, pushConfigured, telegramConfigured } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { db } from '../../db/client.js';
 import {
@@ -9,6 +9,7 @@ import {
   type Notification,
   type NotificationPreferences,
 } from '../../db/schema.js';
+import { sendTelegramNotification } from '../telegram/telegram-link.service.js';
 import { sendNotificationEmail } from './email.service.js';
 import { sendPushNotification } from './push.service.js';
 
@@ -28,6 +29,7 @@ export async function dispatchNotification(
 
   if (prefs.emailEnabled) jobs.push(dispatchEmail(notification));
   if (prefs.pushEnabled) jobs.push(dispatchPush(notification));
+  if (prefs.telegramEnabled) jobs.push(dispatchTelegram(notification, prefs));
 
   if (jobs.length === 0) return;
   await Promise.all(jobs);
@@ -96,6 +98,39 @@ async function dispatchPush(notification: Notification): Promise<void> {
       .set({ pushError: String(err instanceof Error ? err.message : err).slice(0, 500) })
       .where(eq(notifications.id, notification.id));
   }
+}
+
+async function dispatchTelegram(
+  notification: Notification,
+  prefs: NotificationPreferences,
+): Promise<void> {
+  if (!telegramConfigured || !prefs.telegramChatId) return;
+
+  try {
+    await sendTelegramNotification(prefs.telegramChatId, buildTelegramText(notification));
+
+    await db
+      .update(notifications)
+      .set({ telegramSentAt: new Date(), telegramError: null })
+      .where(eq(notifications.id, notification.id));
+  } catch (err) {
+    logger.warn({ err, notificationId: notification.id }, 'Wysyłka Telegram nie powiodła się');
+    await db
+      .update(notifications)
+      .set({ telegramError: String(err instanceof Error ? err.message : err).slice(0, 500) })
+      .where(eq(notifications.id, notification.id));
+  }
+}
+
+function buildTelegramText(notification: Notification): string {
+  const lines = [`<b>${escapeHtml(notification.title)}</b>`];
+  if (notification.body) lines.push(escapeHtml(notification.body));
+  lines.push(buildActionUrl(notification));
+  return lines.join('\n\n');
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /** Deep link the e-mail button / push click should open. */

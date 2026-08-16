@@ -90,6 +90,70 @@ export interface ListingDuplicate {
 const MIN_MARKET_SAMPLE_SIZE = 5;
 
 /**
+ * Correlated subquery comparing a listing's price against the median of
+ * "similar enough" comparables (same make/model, year +/-1, mileage +/-30%).
+ * Shared between `listingColumns()` (search results / listing cards) and
+ * `getPriceVsMarketForListings()` (the "okazja" notification check fired
+ * right after ingest) so the two definitions of "good deal" never drift
+ * apart.
+ */
+function priceVsMarketPctSql() {
+  return sql<number | null>`(
+    select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
+      then round((
+        (${listings.price} - (stats->>'median')::numeric)
+        / (stats->>'median')::numeric * 100
+      )::numeric, 1)
+      else null
+    end
+    from (
+      select jsonb_build_object(
+        'median', percentile_cont(0.5) within group (order by l2.price),
+        'count', count(*)
+      ) as stats
+      from listings l2
+      where l2.make = listings.make
+        and l2.model = listings.model
+        and l2.year between listings.year - 1 and listings.year + 1
+        and l2.mileage_km between listings.mileage_km * 0.7 and listings.mileage_km * 1.3
+        and l2.price is not null
+        and l2.is_active = true
+        and l2.is_archived = false
+        and l2.id != listings.id
+    ) cohort
+  )`.mapWith((v) => (v === null ? null : Number(v)));
+}
+
+/**
+ * Lightweight price-vs-market lookup for a handful of listing ids - used
+ * right after ingest to decide which brand-new listings are an "okazja"
+ * worth their own notification. Skips the full `listingColumns()` shape
+ * (duplicates/groups/favourite joins a just-inserted listing never needs).
+ */
+export async function getPriceVsMarketForListings(
+  listingIds: string[],
+): Promise<Map<string, { title: string; price: number | null; priceVsMarketPct: number | null }>> {
+  if (listingIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      price: listings.price,
+      priceVsMarketPct: priceVsMarketPctSql(),
+    })
+    .from(listings)
+    .where(inArray(listings.id, listingIds));
+
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { title: row.title, price: row.price, priceVsMarketPct: row.priceVsMarketPct },
+    ]),
+  );
+}
+
+/**
  * The full per-row shape every listing list (search results, recently
  * viewed) renders the same `ListingCard` from - one set of column
  * definitions so the favourite/group/price-trend subqueries are not
@@ -140,7 +204,7 @@ function listingColumns(userId: string) {
       ))
       from listing_matches m
       join filter_groups g on g.id = m.group_id
-      where m.listing_id = listings.id and g.user_id = ${userId}
+      where m.listing_id = listings.id and g.user_id = ${userId} and m.removed_at is null
     ), '[]'::jsonb)`,
     priceChangePct: sql<number | null>`(
       select h.delta_pct from listing_price_history h
@@ -166,30 +230,7 @@ function listingColumns(userId: string) {
     // "similar enough" without shrinking the cohort to nothing. One
     // correlated subquery does both the median and the sample size so
     // the cohort is only scanned once.
-    priceVsMarketPct: sql<number | null>`(
-      select case when (stats->>'count')::int >= ${MIN_MARKET_SAMPLE_SIZE}
-        then round((
-          (${listings.price} - (stats->>'median')::numeric)
-          / (stats->>'median')::numeric * 100
-        )::numeric, 1)
-        else null
-      end
-      from (
-        select jsonb_build_object(
-          'median', percentile_cont(0.5) within group (order by l2.price),
-          'count', count(*)
-        ) as stats
-        from listings l2
-        where l2.make = listings.make
-          and l2.model = listings.model
-          and l2.year between listings.year - 1 and listings.year + 1
-          and l2.mileage_km between listings.mileage_km * 0.7 and listings.mileage_km * 1.3
-          and l2.price is not null
-          and l2.is_active = true
-          and l2.is_archived = false
-          and l2.id != listings.id
-      ) cohort
-    )`.mapWith((v) => (v === null ? null : Number(v))),
+    priceVsMarketPct: priceVsMarketPctSql(),
     // How long this exact ad has been up - the raw number the frontend
     // compares against `medianDaysToSellCohort` to flag it as sitting
     // unusually long (see `SellerDialog`/the "long on market" badge).
@@ -260,6 +301,7 @@ export async function searchListings(
           and(
             eq(listingMatches.listingId, listings.id),
             eq(filterGroups.userId, userId),
+            sql`${listingMatches.removedAt} IS NULL`,
             query.groupId ? eq(listingMatches.groupId, query.groupId) : undefined,
             query.filterId ? eq(listingMatches.filterId, query.filterId) : undefined,
           ),
@@ -499,6 +541,7 @@ export async function listCities(userId: string) {
               and(
                 eq(listingMatches.listingId, listings.id),
                 eq(filterGroups.userId, userId),
+                sql`${listingMatches.removedAt} IS NULL`,
               ),
             ),
         ),
@@ -566,7 +609,7 @@ export async function listFavorites(userId: string) {
         ))
         from listing_matches m
         join filter_groups g on g.id = m.group_id
-        where m.listing_id = ${listings.id} and g.user_id = ${userId}
+        where m.listing_id = ${listings.id} and g.user_id = ${userId} and m.removed_at is null
       ), '[]'::jsonb)`,
       duplicates: sql<ListingDuplicate[]>`coalesce((
         select jsonb_agg(jsonb_build_object(
@@ -646,7 +689,31 @@ export async function listRecentlyViewed(
 /* --------------------------------- stats --------------------------------- */
 
 export async function getStats(userId: string) {
+  // Current relevance: does this listing still have a *live* match to one of
+  // the caller's groups. Used for anything describing "now" (the top tiles,
+  // "by make").
   const scoped = exists(
+    db
+      .select({ one: sql`1` })
+      .from(listingMatches)
+      .innerJoin(filterGroups, eq(filterGroups.id, listingMatches.groupId))
+      .where(
+        and(
+          eq(listingMatches.listingId, listings.id),
+          eq(filterGroups.userId, userId),
+          sql`${listingMatches.removedAt} IS NULL`,
+        ),
+      ),
+  );
+
+  // Historical relevance: was this listing *ever* matched by one of the
+  // caller's groups, live match or not. `soldByModel` below is the one
+  // consumer - whether a car sold is a fact about the past, and editing a
+  // filter's criteria (then running "Wyczyść nieaktualne") must not be able
+  // to make that car quietly vanish from the sold count just because it no
+  // longer fits *today's* narrower criteria. See the `removedAt` doc comment
+  // on `listingMatches` for the full reasoning.
+  const scopedEver = exists(
     db
       .select({ one: sql`1` })
       .from(listingMatches)
@@ -700,6 +767,11 @@ export async function getStats(userId: string) {
    * Sold-vs-listed per model. "Sold" means the advert disappeared from the
    * marketplace, which is the only signal these sites give us. Models with a
    * single listing are dropped - a 100% ratio off one car says nothing.
+   *
+   * Deliberately `scopedEver`, not `scoped`: a car that sold while this
+   * group was tracking it stays counted here even if a filter edit later
+   * (plus "Wyczyść nieaktualne") removed its live match - the sale already
+   * happened, tightening a price range today cannot un-happen it.
    */
   const soldByModel = await db
     .select({
@@ -720,12 +792,13 @@ export async function getStats(userId: string) {
       ),
     })
     .from(listings)
-    .where(and(scoped, sql`${listings.make} is not null`))
+    .where(and(scopedEver, sql`${listings.make} is not null`))
     .groupBy(listings.make, listings.model)
     .having(sql`count(distinct ${listings.id}) > 1`)
     .orderBy(desc(sql`count(distinct ${listings.id}) filter (where ${listings.isArchived})`))
     .limit(25);
 
+  // Same reasoning as `soldByModel` - a car sold is a fact about the past.
   const [archivedTotals] = await db
     .select({
       archived: sql<number>`count(distinct ${listings.id}) filter (where ${listings.isArchived})`.mapWith(
@@ -733,7 +806,7 @@ export async function getStats(userId: string) {
       ),
     })
     .from(listings)
-    .where(scoped);
+    .where(scopedEver);
 
   return {
     total: totals?.total ?? 0,

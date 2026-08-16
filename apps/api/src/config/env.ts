@@ -96,6 +96,13 @@ const envSchema = z.object({
   VEHICLE_HISTORY_PROVIDER: z.enum(['none', 'autodna', 'carvertical']).default('none'),
   AUTODNA_API_KEY: z.string().optional(),
   CARVERTICAL_API_KEY: z.string().optional(),
+
+  // --- Telegram bot notifications ---------------------------------------------
+  // Optional third notification channel alongside email/push. LAN-only
+  // deployment means webhooks (which need a public HTTPS callback) are out -
+  // the bot polls `getUpdates` instead. Get a token from @BotFather.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(4000),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -142,3 +149,5 @@ export const anthropicConfigured = Boolean(env.ANTHROPIC_API_KEY);
 export const vehicleHistoryConfigured =
   (env.VEHICLE_HISTORY_PROVIDER === 'autodna' && Boolean(env.AUTODNA_API_KEY)) ||
   (env.VEHICLE_HISTORY_PROVIDER === 'carvertical' && Boolean(env.CARVERTICAL_API_KEY));
+
+export const telegramConfigured = Boolean(env.TELEGRAM_BOT_TOKEN);

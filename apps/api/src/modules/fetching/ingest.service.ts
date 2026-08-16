@@ -168,7 +168,11 @@ async function ingestOne(
       })
       .onConflictDoUpdate({
         target: [listingMatches.listingId, listingMatches.filterId],
-        set: { lastMatchedAt: now, rank },
+        // A fresh fetch actively re-confirming this (listing, filter) pair
+        // un-removes it if "Wyczyść nieaktualne" had soft-deleted it earlier -
+        // the criteria (or the listing) changed back to matching again, so
+        // the old removal no longer reflects reality.
+        set: { lastMatchedAt: now, rank, removedAt: null },
       })
       .returning({
         firstMatchedAt: listingMatches.firstMatchedAt,

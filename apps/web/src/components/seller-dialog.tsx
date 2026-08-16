@@ -40,8 +40,10 @@ export function SellerDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <StoreIcon className="size-5" />
-            {sellerName}
+            <StoreIcon className="size-5 shrink-0" />
+            <span className="truncate" title={sellerName ?? undefined}>
+              {sellerName}
+            </span>
           </DialogTitle>
           <DialogDescription>
             Wszystkie ogłoszenia pod tą nazwą sprzedawcy w naszej bazie, niezależnie od serwisu.
@@ -74,7 +76,7 @@ export function SellerDialog({
               </p>
             ) : null}
 
-            <div className="max-h-96 space-y-2 overflow-y-auto">
+            <div className="max-h-96 space-y-2 overflow-x-hidden overflow-y-auto">
               {profile.data.activeListings.map((item) => (
                 <a
                   key={item.id}
@@ -99,19 +101,23 @@ export function SellerDialog({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{item.title}</p>
-                    <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                    {/* `min-w-0` here too - a flex row's text does not shrink/truncate
+                        by default, only its already-`min-w-0` parent does. */}
+                    <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
                       <span
-                        className={cn('inline-block size-1.5 rounded-full')}
+                        className={cn('inline-block size-1.5 shrink-0 rounded-full')}
                         style={{ background: PROVIDER_COLORS[item.provider] ?? '#475569' }}
                       />
-                      {label(PROVIDER_LABELS, item.provider)} · {item.daysListed} dni na rynku
+                      <span className="truncate">
+                        {label(PROVIDER_LABELS, item.provider)} · {item.daysListed} dni na rynku
+                      </span>
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="data-figure text-sm font-semibold">
+                    <span className="data-figure text-sm font-semibold whitespace-nowrap">
                       {formatPrice(item.price, item.currency)}
                     </span>
-                    <ExternalLinkIcon className="text-muted-foreground size-3.5" />
+                    <ExternalLinkIcon className="text-muted-foreground size-3.5 shrink-0" />
                   </div>
                 </a>
               ))}

@@ -62,6 +62,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-Cars Fetcher <no-reply@cars-fetcher.local>}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Optional third notification channel - get a token from @BotFather.
+      # Unset means the app just runs without it (see telegramConfigured).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_POLL_INTERVAL_MS: ${TELEGRAM_POLL_INTERVAL_MS:-4000}
     ports:
       # Exposed for debugging; the browser goes through nginx on 8090.
       - "${API_PORT:-4000}:4000"

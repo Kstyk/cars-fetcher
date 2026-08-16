@@ -315,6 +315,7 @@ export interface Notification {
   id: string;
   type:
     | 'new_listing'
+    | 'good_deal'
     | 'price_drop'
     | 'price_raise'
     | 'listing_removed'
@@ -338,16 +339,26 @@ export interface NotificationPreferences {
   emailEnabled: boolean;
   pushEnabled: boolean;
   inAppEnabled: boolean;
+  telegramEnabled: boolean;
   notifyNewListing: boolean;
+  notifyGoodDeal: boolean;
   notifyPriceDrop: boolean;
   notifyListingRemoved: boolean;
   notifyFetchFailed: boolean;
   priceDropThresholdPct: number;
+  goodDealThresholdPct: number;
   digestFrequency: 'instant' | 'hourly' | 'daily' | 'weekly' | 'off';
   quietHoursStart: number | null;
   quietHoursEnd: number | null;
   timezone: string;
   updatedAt: string;
+}
+
+export interface TelegramLinkStatus {
+  configured: boolean;
+  linked: boolean;
+  username: string | null;
+  deepLink: string | null;
 }
 
 export interface FetchRun {
@@ -564,4 +575,24 @@ export interface SellerProfile {
   /** How fast *this seller's* own past ads sold - not the market-wide cohort on a listing. */
   medianDaysToSellOwn: number | null;
   activeListings: SellerListing[];
+}
+
+/* ------------------------------ usage stats -------------------------------- */
+
+export interface FilterUsageStat {
+  filterId: string;
+  filterName: string | null;
+  make: string | null;
+  model: string | null;
+  provider: Provider;
+  createdAt: string;
+  groupId: string;
+  groupName: string;
+  groupColor: string | null;
+  totalMatches: number;
+  activeMatches: number;
+  totalViews: number;
+  lastNewMatchAt: string | null;
+  daysSinceLastNewMatch: number | null;
+  isDead: boolean;
 }

@@ -14,6 +14,7 @@ import { dispatchNotification } from './dispatch.service.js';
 
 export type NotificationType =
   | 'new_listing'
+  | 'good_deal'
   | 'price_drop'
   | 'price_raise'
   | 'listing_removed'
@@ -252,6 +253,8 @@ function isTypeEnabled(
   switch (type) {
     case 'new_listing':
       return prefs.notifyNewListing;
+    case 'good_deal':
+      return prefs.notifyGoodDeal;
     case 'price_drop':
     case 'price_raise':
       return prefs.notifyPriceDrop;
@@ -285,6 +288,18 @@ export function isPriceDropWorthNotifying(
   deltaPct: number,
 ): boolean {
   return Math.abs(deltaPct) >= prefs.priceDropThresholdPct;
+}
+
+/**
+ * `priceVsMarketPct` is negative for a below-median listing (see
+ * `listings.service.ts`'s `priceVsMarketPctSql`) - a "good deal" is one far
+ * enough below zero to clear the user's threshold.
+ */
+export function isGoodDealWorthNotifying(
+  prefs: NotificationPreferences,
+  priceVsMarketPct: number | null,
+): boolean {
+  return priceVsMarketPct !== null && priceVsMarketPct <= -prefs.goodDealThresholdPct;
 }
 
 export { sql };

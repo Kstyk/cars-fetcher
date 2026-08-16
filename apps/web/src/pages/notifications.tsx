@@ -4,6 +4,7 @@ import {
   BellIcon,
   CheckCheckIcon,
   ExternalLinkIcon,
+  FlameIcon,
   ListIcon,
   SparklesIcon,
   TrendingDownIcon,
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 
 const ICONS: Record<Notification['type'], React.ReactNode> = {
   new_listing: <SparklesIcon />,
+  good_deal: <FlameIcon />,
   price_drop: <TrendingDownIcon />,
   price_raise: <TrendingDownIcon className="rotate-180" />,
   listing_removed: <XCircleIcon />,
@@ -84,7 +86,9 @@ export function NotificationsPage() {
                     'grid size-9 shrink-0 place-items-center rounded-lg [&>svg]:size-4',
                     notification.type === 'fetch_failed'
                       ? 'bg-destructive/15 text-destructive'
-                      : 'bg-secondary text-secondary-foreground',
+                      : notification.type === 'good_deal'
+                        ? 'bg-amber-500/15 text-amber-500'
+                        : 'bg-secondary text-secondary-foreground',
                   )}
                 >
                   {ICONS[notification.type]}

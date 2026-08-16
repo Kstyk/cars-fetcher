@@ -11,6 +11,7 @@ import {
 } from '../../db/schema.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { getSource } from '../../providers/registry.js';
+import { getPriceVsMarketForListings } from '../listings/listings.service.js';
 import * as notificationsService from '../notifications/notifications.service.js';
 import { deactivateStaleListings, ingestListings } from './ingest.service.js';
 
@@ -249,6 +250,29 @@ async function emitListingNotifications(
         body: `Filtr "${filterLabel}"`,
         groupId,
         payload: { count: remaining },
+      });
+    }
+  }
+
+  if (data.notifyOnNew && data.newListingIds.length > 0 && prefs.notifyGoodDeal) {
+    // Checked across *every* new listing from this run, not just the 5
+    // detailed above - a below-market car three pages in is exactly the one
+    // worth surfacing on its own, separate from the generic "new listing"
+    // noise (which the user may well have turned off).
+    const market = await getPriceVsMarketForListings(data.newListingIds);
+    for (const [listingId, info] of market) {
+      if (!notificationsService.isGoodDealWorthNotifying(prefs, info.priceVsMarketPct)) continue;
+
+      await notificationsService.notify({
+        userId,
+        type: 'good_deal',
+        title: `🔥 Okazja: ${info.title}`,
+        body: info.price
+          ? `${formatPln(info.price)} (${info.priceVsMarketPct}% vs rynek) — filtr "${filterLabel}"`
+          : filterLabel,
+        listingId,
+        groupId,
+        payload: { priceVsMarketPct: info.priceVsMarketPct },
       });
     }
   }
