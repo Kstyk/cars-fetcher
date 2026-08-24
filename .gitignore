@@ -24,3 +24,8 @@ apps/*/drizzle.config.js
 # Docker deploy hook artefacts
 .docker-deploy-stamp
 docker-deploy.log
+
+# Handoff file from test/global-setup.ts (integration tests) to
+# test/setup-env.ts - carries a fresh testcontainers connection string, torn
+# down again once the run finishes.
+apps/api/test/.runtime-env.json

@@ -173,6 +173,34 @@ npm run db:seed         # optional: demo account + sample data
 npm run dev             # api on :4000, web on :5173 (hot reload)
 ```
 
+## Tests
+
+**Backend** (`apps/api`):
+
+```bash
+npm test --workspace @cars-fetcher/api                   # unit - pure logic, no database
+npm run test:integration --workspace @cars-fetcher/api   # integration - a real Express app + a disposable Postgres
+```
+
+Integration tests spin up a real Postgres in a container (testcontainers,
+needs Docker running), apply every Drizzle migration to it, and drive the
+real app through supertest - no mocked database, no faked requests. The
+container is torn down automatically once the run finishes. One of these
+tests is a direct regression check for the bug described in the "sales by
+model" section earlier in this repo's history: narrowing a filter's
+criteria and running "clear stale matches" must never shrink the historical
+sold-car count again.
+
+**Frontend** (`apps/web`):
+
+```bash
+npm test --workspace @cars-fetcher/web
+```
+
+Vitest + Testing Library + MSW - components are actually rendered (jsdom),
+network calls are intercepted at the `fetch` level rather than mocked at
+the hook level.
+
 ## Environment variables
 
 Full list with comments in [`.env.example`](.env.example). Required to

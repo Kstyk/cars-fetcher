@@ -170,6 +170,34 @@ npm run db:seed         # opcjonalnie: konto demo + przykładowe dane
 npm run dev             # api na :4000, web na :5173 (hot reload)
 ```
 
+## Testy
+
+**Backend** (`apps/api`):
+
+```bash
+npm test --workspace @cars-fetcher/api              # jednostkowe - czysta logika, bez bazy
+npm run test:integration --workspace @cars-fetcher/api  # integracyjne - prawdziwy Express + jednorazowy Postgres
+```
+
+Testy integracyjne stawiają prawdziwą bazę Postgres w kontenerze
+(testcontainers, wymaga uruchomionego Dockera), nakładają na nią migracje
+Drizzle i odpytują prawdziwą aplikację przez supertest - nie ma mocków bazy
+ani atrap requestów. Kontener znika automatycznie po zakończeniu testów.
+Jeden z tych testów to bezpośrednia regresja na błąd opisany w sekcji
+"Sprzedaż wg modelu" wcześniej w tym repo: zawężenie kryteriów filtra i
+„Wyczyść nieaktualne” nie może już nigdy pomniejszyć historycznej liczby
+sprzedanych aut.
+
+**Frontend** (`apps/web`):
+
+```bash
+npm test --workspace @cars-fetcher/web
+```
+
+Vitest + Testing Library + MSW - komponenty renderowane naprawdę (jsdom),
+zapytania sieciowe przechwytywane na poziomie `fetch`, nie mockowane na
+poziomie hooków.
+
 ## Zmienne środowiskowe
 
 Pełna lista z komentarzami w [`.env.example`](.env.example). Wymagane do

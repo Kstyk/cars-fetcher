@@ -2,7 +2,10 @@ import pino from 'pino';
 import { env, isProduction } from './env.js';
 
 export const logger = pino({
-  level: isProduction ? 'info' : 'debug',
+  // Integration tests drive the real app through supertest, one request log
+  // per assertion - silent keeps `vitest run` output readable while still
+  // leaving `debug` for actual local dev.
+  level: isProduction ? 'info' : env.NODE_ENV === 'test' ? 'silent' : 'debug',
   transport: isProduction
     ? undefined
     : {

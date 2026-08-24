@@ -195,6 +195,7 @@ export function MultiCombobox({
           <Button
             type="button"
             variant="outline"
+            role="combobox"
             className={cn(
               'w-full justify-between font-normal',
               values.length > 0 && 'pr-14',
