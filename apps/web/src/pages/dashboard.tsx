@@ -17,7 +17,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ListingCard } from '@/components/listing-card';
 import { formatPrice, formatRelative } from '@/lib/format';
 import { useFetchGroup, useFilterGroups, useListingStats, useListings } from '@/lib/queries';

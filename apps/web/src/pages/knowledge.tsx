@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth';
 import {
   BODY_LABELS,
@@ -175,7 +176,7 @@ export function KnowledgePage() {
 function ModelCard({ model }: { model: VehicleModelSummary }) {
   return (
     <Link to="/wiedza/$modelId" params={{ modelId: model.id }}>
-      <Card className="h-full transition-shadow hover:shadow-md">
+      <Card className="h-full transition-all hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none">
         <CardContent className="space-y-2 py-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -237,7 +238,7 @@ function SearchResults({
     <div className="space-y-2">
       {results.map((r) => (
         <Link key={r.id} to="/wiedza/$modelId" params={{ modelId: r.id }}>
-          <Card className="transition-shadow hover:shadow-md">
+          <Card className="transition-all hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none">
             <CardContent className="flex items-center justify-between gap-3 py-3">
               <p className="font-medium">
                 {r.make} {r.model} <span className="text-muted-foreground">· {r.generation}</span>
@@ -432,7 +433,7 @@ export function KnowledgeModelPage() {
       {m.engines.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Silniki</h2>
-          <div className="overflow-x-auto rounded-xl border">
+          <div className="overflow-x-auto rounded-base border-2 border-border">
             <table className="w-full text-sm">
               <thead className="text-muted-foreground bg-muted/40 text-left text-xs">
                 <tr className="border-b">

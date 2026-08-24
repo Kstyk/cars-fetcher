@@ -43,7 +43,7 @@ export function MapPicker({
   const center: [number, number] = point ? [point.lat, point.lon] : POLAND_CENTER;
 
   return (
-    <div className="h-96 w-full overflow-hidden rounded-lg border">
+    <div className="h-96 w-full overflow-hidden rounded-base border-2 border-border">
       <MapContainer
         center={center}
         zoom={point ? 9 : 6}
@@ -63,7 +63,7 @@ export function MapPicker({
               <Circle
                 center={[point.lat, point.lon]}
                 radius={radiusKm * 1000}
-                pathOptions={{ color: '#007d7e', fillOpacity: 0.1 }}
+                pathOptions={{ color: '#3b6fed', fillOpacity: 0.15 }}
               />
             ) : null}
           </>

@@ -2,7 +2,8 @@ import { Link } from '@tanstack/react-router';
 import { AlertTriangleIcon, ExternalLinkIcon, GaugeIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PROVIDER_LABELS, formatDateTime, label } from '@/lib/format';
 import { useFilterUsageStats } from '@/lib/queries';
 import type { FilterUsageStat } from '@/lib/types';
@@ -58,7 +59,7 @@ export function UsageStatsPage() {
           </div>
 
           {deadCount > 0 ? (
-            <div className="flex items-start gap-3 rounded-lg border border-dashed px-3 py-2.5">
+            <div className="flex items-start gap-3 rounded-base border-2 border-dashed border-border px-3 py-2.5">
               <AlertTriangleIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
               <p className="text-muted-foreground text-xs">
                 {deadCount} {deadCount === 1 ? 'filtr' : 'filtrów'} nie znalazł żadnej nowej oferty

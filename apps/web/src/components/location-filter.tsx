@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,

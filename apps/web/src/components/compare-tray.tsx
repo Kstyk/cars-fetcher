@@ -35,11 +35,11 @@ export function CompareTray() {
   return (
     <>
       <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
-        <div className="bg-card flex max-w-full items-center gap-3 rounded-xl border p-2 pr-3 shadow-lg">
+        <div className="bg-secondary-background flex max-w-full items-center gap-3 rounded-base border-2 border-border p-2 pr-3 shadow-shadow">
           <div className="flex items-center gap-2 pl-1">
             {compare.items.map((item) => (
               <div key={item.id} className="group relative">
-                <div className="bg-muted size-11 overflow-hidden rounded-lg border">
+                <div className="bg-muted size-11 overflow-hidden rounded-base border-2 border-border">
                   {item.thumbnailUrl ? (
                     <img
                       src={item.thumbnailUrl}
@@ -65,7 +65,7 @@ export function CompareTray() {
             {Array.from({ length: COMPARE_LIMIT - compare.items.length }).map((_, i) => (
               <div
                 key={i}
-                className="text-muted-foreground/50 grid size-11 place-items-center rounded-lg border border-dashed text-xs"
+                className="text-muted-foreground/50 grid size-11 place-items-center rounded-base border-2 border-dashed border-border text-xs"
               >
                 +
               </div>
@@ -158,7 +158,7 @@ function CompareDialog({
                       className="group block"
                       onClick={() => trackView.mutate(item.id)}
                     >
-                      <div className="bg-muted mb-2 aspect-4/3 w-full overflow-hidden rounded-lg border">
+                      <div className="bg-muted mb-2 aspect-4/3 w-full overflow-hidden rounded-base border-2 border-border">
                         {item.thumbnailUrl ? (
                           <img
                             src={item.thumbnailUrl}
@@ -212,7 +212,7 @@ function CompareDialog({
                         >
                           <span
                             className={cn(
-                              isBest && 'text-[var(--success)]',
+                              isBest && 'text-success',
                             )}
                           >
                             {row.render(item)}

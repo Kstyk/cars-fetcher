@@ -134,8 +134,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <span className="bg-secondary grid size-8 place-items-center rounded-full text-xs font-semibold">
+              <Button variant="ghost" size="icon">
+                <span className="bg-secondary grid size-8 place-items-center rounded-base border-2 border-border text-xs font-semibold">
                   {initials || <UserIcon className="size-4" />}
                 </span>
               </Button>

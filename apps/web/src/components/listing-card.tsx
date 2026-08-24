@@ -77,7 +77,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
   const stale = isStaleListing(listing);
 
   return (
-    <Card className="group relative gap-0 overflow-hidden pt-0 transition-shadow hover:shadow-md">
+    <Card className="group relative gap-0 overflow-hidden pt-0 transition-all hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none">
       <a
         href={listing.url}
         target="_blank"
@@ -107,7 +107,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
             so preventDefault here only ever cancels the card's navigation.
           */}
           <div
-            className="bg-background/90 rounded-md border p-1 shadow-sm"
+            className="bg-secondary-background/90 rounded-base border-2 border-border p-1 shadow-shadow"
             onClick={(event) => event.preventDefault()}
             title={
               compareSelected
@@ -167,7 +167,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
           size="icon"
           aria-label={listing.isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
           disabled={toggleFavorite.isPending}
-          className="absolute top-2 right-2 rounded-full shadow-sm"
+          className="absolute top-2 right-2"
           onClick={(event) => {
             // The whole image is a link to the provider.
             event.preventDefault();
@@ -452,7 +452,7 @@ function PriceHistoryDialog({
         )}
 
         {offer ? (
-          <div className="space-y-2 rounded-lg border p-3">
+          <div className="space-y-2 rounded-base border-2 border-border bg-secondary-background p-3 shadow-shadow">
             <p className="flex items-center gap-1.5 text-sm font-medium">
               <TagIcon className="size-4" />
               Sugerowana oferta:{' '}

@@ -9,6 +9,7 @@ import {
   Trash2Icon,
 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,9 +30,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EmptyState, Skeleton, Textarea } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { formatRelative } from '@/lib/format';
+import { describeGroupRun, formatRelative } from '@/lib/format';
 import { EditGroupDialog } from '@/components/edit-group-dialog';
 import { MultiCombobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/utils';
@@ -112,7 +115,14 @@ export function GroupsPage() {
                       variant="ghost"
                       aria-label="Pobierz teraz"
                       disabled={fetchGroup.isPending}
-                      onClick={() => fetchGroup.mutate(group.id)}
+                      onClick={() =>
+                        fetchGroup.mutate(group.id, {
+                          onSuccess: (result) => {
+                            const { message, kind } = describeGroupRun(result);
+                            toast[kind](message);
+                          },
+                        })
+                      }
                     >
                       <RefreshCwIcon
                         className={
@@ -382,7 +392,7 @@ function CreateGroupDialog({
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-base border-2 border-border px-3 py-2.5">
             <Label htmlFor="notify" className="cursor-pointer">
               Powiadamiaj o nowych ofertach
             </Label>
@@ -504,8 +514,8 @@ function MergeGroupsDialog({
               <div
                 key={group.id}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg border px-3 py-2',
-                  isSelected && 'border-primary/40 bg-primary/5',
+                  'flex items-center gap-3 rounded-base border-2 border-border px-3 py-2',
+                  isSelected && 'bg-main/10',
                 )}
               >
                 <Checkbox

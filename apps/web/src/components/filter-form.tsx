@@ -5,7 +5,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox, MultiCombobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label as FieldLabel } from '@/components/ui/label';
-import { Separator, Skeleton } from '@/components/ui/misc';
+import { Separator } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import { VOIVODESHIPS } from '@/components/location-filter';
 import {
   BODY_LABELS,
@@ -400,10 +401,10 @@ export function FilterForm({
               disabled={!entry.implemented}
               onClick={() => toggleProvider(entry.provider)}
               className={cn(
-                'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                'flex flex-col items-start gap-0.5 rounded-base border-2 border-border px-3 py-2 text-left text-sm transition-all',
                 value.providers.includes(entry.provider)
-                  ? 'border-primary bg-primary/10 font-medium'
-                  : 'hover:bg-accent/50',
+                  ? 'bg-main text-main-foreground shadow-shadow font-medium'
+                  : 'hover:translate-x-reverseBoxShadowX hover:translate-y-reverseBoxShadowY hover:shadow-shadow',
                 !entry.implemented && 'cursor-not-allowed opacity-50',
               )}
             >

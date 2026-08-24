@@ -1,34 +1,9 @@
-import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { CheckIcon, ChevronsUpDownIcon, SearchIcon, XIcon } from 'lucide-react';
-import { useMemo, useState, type ComponentProps } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-
-export const Popover = PopoverPrimitive.Root;
-export const PopoverTrigger = PopoverPrimitive.Trigger;
-
-export function PopoverContent({
-  className,
-  align = 'start',
-  sideOffset = 4,
-  ...props
-}: ComponentProps<typeof PopoverPrimitive.Content>) {
-  return (
-    <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content
-        align={align}
-        sideOffset={sideOffset}
-        className={cn(
-          'bg-popover text-popover-foreground z-50 w-72 rounded-md border p-0 shadow-md outline-none',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-          className,
-        )}
-        {...props}
-      />
-    </PopoverPrimitive.Portal>
-  );
-}
 
 export interface ComboboxOption {
   value: string;
@@ -124,8 +99,8 @@ export function Combobox({
         ) : null}
       </div>
 
-      <PopoverContent className="w-(--radix-popover-trigger-width)">
-        <div className="relative border-b p-2">
+      <PopoverContent className="w-(--radix-popover-trigger-width) bg-secondary-background p-0">
+        <div className="relative border-b-2 border-border p-2">
           <SearchIcon className="text-muted-foreground absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />
           <Input
             autoFocus
@@ -152,8 +127,8 @@ export function Combobox({
                   setSearch('');
                 }}
                 className={cn(
-                  'hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
-                  option.value === value && 'bg-accent/60',
+                  'hover:bg-main hover:text-main-foreground flex w-full items-center gap-2 rounded-base px-2 py-1.5 text-left text-sm',
+                  option.value === value && 'bg-main/20 font-medium',
                 )}
               >
                 <CheckIcon
@@ -248,9 +223,9 @@ export function MultiCombobox({
         ) : null}
       </div>
 
-      <PopoverContent className="w-(--radix-popover-trigger-width)">
+      <PopoverContent className="w-(--radix-popover-trigger-width) bg-secondary-background p-0">
         {options.length > 8 ? (
-          <div className="relative border-b p-2">
+          <div className="relative border-b-2 border-border p-2">
             <SearchIcon className="text-muted-foreground absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />
             <Input
               value={search}
@@ -267,13 +242,13 @@ export function MultiCombobox({
               key={option.value}
               type="button"
               onClick={() => toggle(option.value)}
-              className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+              className="hover:bg-main hover:text-main-foreground flex w-full items-center gap-2 rounded-base px-2 py-1.5 text-left text-sm"
             >
               <span
                 className={cn(
-                  'grid size-4 shrink-0 place-items-center rounded-sm border',
+                  'grid size-4 shrink-0 place-items-center rounded-base border-2 border-border',
                   values.includes(option.value) &&
-                    'bg-primary border-primary text-primary-foreground',
+                    'bg-main text-main-foreground',
                 )}
               >
                 {values.includes(option.value) ? (
@@ -286,7 +261,7 @@ export function MultiCombobox({
         </div>
 
         {values.length > 0 ? (
-          <div className="border-t p-1">
+          <div className="border-t-2 border-border p-1">
             <Button
               type="button"
               variant="ghost"

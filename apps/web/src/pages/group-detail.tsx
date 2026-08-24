@@ -11,6 +11,7 @@ import {
   Trash2Icon,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import {
   EMPTY_FILTER_FORM,
   FilterForm,
@@ -34,14 +35,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  EmptyState,
-  Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -52,6 +48,7 @@ import {
 import {
   PROVIDER_COLORS,
   PROVIDER_LABELS,
+  describeGroupRun,
   formatDateTime,
   formatRelative,
   label,
@@ -168,7 +165,14 @@ export function GroupDetailPage() {
           </Button>
           <Button
             disabled={fetchGroup.isPending}
-            onClick={() => fetchGroup.mutate(groupId)}
+            onClick={() =>
+              fetchGroup.mutate(groupId, {
+                onSuccess: (result) => {
+                  const { message, kind } = describeGroupRun(result);
+                  toast[kind](message);
+                },
+              })
+            }
           >
             <RefreshCwIcon className={fetchGroup.isPending ? 'animate-spin' : undefined} />
             Pobierz teraz
@@ -216,7 +220,7 @@ export function GroupDetailPage() {
         </TabsContent>
 
         <TabsContent value="filters" className="space-y-3 pt-6">
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-base border-2 border-dashed border-border px-3 py-2">
             <p className="text-muted-foreground text-xs">
               Edytowałeś kryteria albo usunąłeś cały filtr (np. Alfa Romeo) i nie chcesz
               już widzieć jego dawnych trafień? Stare dopasowania zostają, dopóki ich nie

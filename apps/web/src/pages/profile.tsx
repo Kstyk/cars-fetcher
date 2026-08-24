@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator, Skeleton } from '@/components/ui/misc';
+import { Separator } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -188,7 +189,7 @@ function ProfileCard({
               Zapisz zmiany
             </Button>
             {saved ? (
-              <span className="text-sm text-[var(--success)]">Zapisano</span>
+              <span className="text-sm text-success">Zapisano</span>
             ) : null}
           </div>
         </form>
@@ -537,7 +538,7 @@ function TelegramChannelRow({
 
   if (!status.data.configured) {
     return (
-      <div className="rounded-lg border px-3 py-2.5">
+      <div className="rounded-base border-2 border-border px-3 py-2.5">
         <p className="text-sm font-medium">Telegram</p>
         <p className="text-muted-foreground text-xs">
           Bot nie jest skonfigurowany na serwerze (brak TELEGRAM_BOT_TOKEN).
@@ -548,7 +549,7 @@ function TelegramChannelRow({
 
   if (!status.data.linked) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-base border-2 border-border px-3 py-2.5">
         <div>
           <p className="text-sm font-medium">Telegram</p>
           <p className="text-muted-foreground text-xs">
@@ -575,7 +576,7 @@ function TelegramChannelRow({
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+    <div className="flex items-center justify-between gap-4 rounded-base border-2 border-border px-3 py-2.5">
       <div>
         <p className="text-sm font-medium">Telegram</p>
         <p className="text-muted-foreground text-xs">
@@ -613,7 +614,7 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+    <div className="flex items-center justify-between gap-4 rounded-base border-2 border-border px-3 py-2.5">
       <div>
         <p className="text-sm font-medium">{label}</p>
         {description ? (

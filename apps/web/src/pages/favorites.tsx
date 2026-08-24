@@ -1,6 +1,7 @@
 import { HeartIcon } from 'lucide-react';
 import { ListingCard } from '@/components/listing-card';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useFavorites } from '@/lib/queries';
 
 export function FavoritesPage() {

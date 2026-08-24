@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -28,17 +29,150 @@
   unicode-range: U+0100-024F, U+0300-0301, U+0304, U+0308, U+0329, U+1E00-1EFF, U+2020;
 }
 
+/*
+ * neobrutalism.dev design tokens ("Blue" variant) - copied from the
+ * registry's shared token file (confirmed to already be the Blue variant by
+ * diffing its oklch values against https://www.neobrutalism.dev/r/styling/blue.json).
+ * Don't hand-tune these; re-diff against the registry if the palette needs
+ * to move to a different color.
+ */
+:root {
+  --border-radius: 5px;
+  --box-shadow-x: 4px;
+  --box-shadow-y: 4px;
+  --reverse-box-shadow-x: -4px;
+  --reverse-box-shadow-y: -4px;
+
+  --heading-font-weight: 700;
+  --base-font-weight: 500;
+
+  --background: oklch(93.46% 0.0304 254.32);
+  --secondary-background: oklch(100% 0 0);
+  --foreground: oklch(0% 0 0);
+  --main-foreground: oklch(0% 0 0);
+
+  --main: oklch(67.47% 0.1725 259.61);
+  --border: oklch(0% 0 0);
+  --ring: oklch(0% 0 0);
+  --overlay: oklch(0% 0 0 / 0.8);
+
+  --shadow: var(--box-shadow-x) var(--box-shadow-y) 0px 0px var(--border);
+
+  --chart-1: oklch(67.47% 0.1726 259.49);
+  --chart-2: oklch(67.28% 0.2147 24.22);
+  --chart-3: oklch(86.03% 0.176 92.36);
+  --chart-4: oklch(79.76% 0.2044 153.08);
+  --chart-5: oklch(66.34% 0.1806 277.2);
+  --chart-active-dot: #000;
+
+  /*
+   * App-specific extension, NOT part of upstream neobrutalism: keeps the old
+   * shadcn/"new-york" token *names* alive, re-tuned into the Blue palette,
+   * because ~250 call sites across ~30 page/component files still reference
+   * them as plain Tailwind utilities (bg-primary, text-muted-foreground,
+   * bg-accent, bg-destructive/text-destructive, bg-popover, bg-card,
+   * border-input, ...). Primitives under components/ui/ use neobrutalism's
+   * own vocabulary directly (bg-main, border-border, shadow-shadow) instead.
+   */
+  --primary: var(--main);
+  --primary-foreground: var(--main-foreground);
+  --secondary: var(--secondary-background);
+  --secondary-foreground: var(--foreground);
+  --card: var(--secondary-background);
+  --card-foreground: var(--foreground);
+  --popover: var(--secondary-background);
+  --popover-foreground: var(--foreground);
+  --input: var(--border);
+  --muted: oklch(88% 0.02 254);
+  --muted-foreground: oklch(45% 0.02 254);
+  --accent: oklch(85% 0.05 259);
+  --accent-foreground: oklch(0% 0 0);
+  --destructive: oklch(58% 0.22 24);
+  --destructive-foreground: oklch(100% 0 0);
+  --success: oklch(52% 0.19 152);
+}
+
+.dark {
+  --background: oklch(29.12% 0.0633 270.86);
+  --secondary-background: oklch(23.93% 0 0);
+  --foreground: oklch(92.49% 0 0);
+  --main-foreground: oklch(0% 0 0);
+
+  --border: oklch(0% 0 0);
+  --ring: oklch(100% 0 0);
+
+  --shadow: var(--box-shadow-x) var(--box-shadow-y) 0px 0px var(--border);
+
+  --chart-active-dot: #fff;
+
+  /* app-specific extension, dark values */
+  --primary: var(--main);
+  --primary-foreground: var(--main-foreground);
+  --secondary: var(--secondary-background);
+  --secondary-foreground: var(--foreground);
+  --card: var(--secondary-background);
+  --card-foreground: var(--foreground);
+  --popover: var(--secondary-background);
+  --popover-foreground: var(--foreground);
+  --input: var(--border);
+  --muted: oklch(34% 0.03 265);
+  --muted-foreground: oklch(72% 0.02 254);
+  --accent: oklch(38% 0.06 260);
+  --accent-foreground: oklch(92.49% 0 0);
+  --destructive: oklch(70% 0.2 24);
+  --destructive-foreground: oklch(100% 0 0);
+  --success: oklch(78% 0.19 152);
+}
+
 @theme inline {
+  --color-main: var(--main);
   --color-background: var(--background);
+  --color-secondary-background: var(--secondary-background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+  --color-main-foreground: var(--main-foreground);
+  --color-border: var(--border);
+  --color-overlay: var(--overlay);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --spacing-boxShadowX: var(--box-shadow-x);
+  --spacing-boxShadowY: var(--box-shadow-y);
+  --spacing-reverseBoxShadowX: var(--reverse-box-shadow-x);
+  --spacing-reverseBoxShadowY: var(--reverse-box-shadow-y);
+
+  --radius-base: var(--border-radius);
+  /*
+   * Defensive backstop (our addition, not upstream): any stray
+   * rounded-sm/md/lg/xl left over from the old shadcn radius scale resolves
+   * to the same 5px brutalist radius instead of Tailwind's stock scale.
+   */
+  --radius-sm: var(--border-radius);
+  --radius-md: var(--border-radius);
+  --radius-lg: var(--border-radius);
+  --radius-xl: var(--border-radius);
+
+  --shadow-shadow: var(--shadow);
+
+  --font-weight-base: var(--base-font-weight);
+  --font-weight-heading: var(--heading-font-weight);
+
+  --spacing-container: 1300px;
+
+  /* app-specific extension tokens, wired into Tailwind's color namespace */
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-input: var(--input);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -46,63 +180,10 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+
+  /* app identity, unchanged by the neobrutalism migration */
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-data: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
-}
-
-/* Light - "printed ticker tape": a trading receipt, not a brochure. */
-:root {
-  --radius: 0.5rem;
-  --background: oklch(0.98 0.006 150);
-  --foreground: oklch(0.2 0.02 165);
-  --card: oklch(0.995 0.003 150);
-  --card-foreground: oklch(0.2 0.02 165);
-  --popover: oklch(0.995 0.003 150);
-  --popover-foreground: oklch(0.2 0.02 165);
-  --primary: oklch(0.52 0.12 195);
-  --primary-foreground: oklch(0.99 0.003 150);
-  --secondary: oklch(0.95 0.008 150);
-  --secondary-foreground: oklch(0.28 0.02 165);
-  --muted: oklch(0.95 0.008 150);
-  --muted-foreground: oklch(0.5 0.02 155);
-  --accent: oklch(0.93 0.02 155);
-  --accent-foreground: oklch(0.28 0.02 165);
-  --destructive: oklch(0.58 0.18 35);
-  --destructive-foreground: oklch(0.99 0.003 150);
-  --success: oklch(0.55 0.15 155);
-  --border: oklch(0.9 0.01 150);
-  --input: oklch(0.9 0.01 150);
-  --ring: oklch(0.52 0.12 195);
-}
-
-/* Dark - smoky-green CRT, the native mode for this direction. */
-.dark {
-  --background: oklch(0.16 0.02 165);
-  --foreground: oklch(0.93 0.012 140);
-  --card: oklch(0.2 0.022 165);
-  --card-foreground: oklch(0.93 0.012 140);
-  --popover: oklch(0.2 0.022 165);
-  --popover-foreground: oklch(0.93 0.012 140);
-  --primary: oklch(0.78 0.13 190);
-  --primary-foreground: oklch(0.16 0.02 165);
-  --secondary: oklch(0.26 0.02 165);
-  --secondary-foreground: oklch(0.93 0.012 140);
-  --muted: oklch(0.26 0.02 165);
-  --muted-foreground: oklch(0.68 0.02 150);
-  --accent: oklch(0.3 0.03 165);
-  --accent-foreground: oklch(0.93 0.012 140);
-  --destructive: oklch(0.66 0.17 35);
-  --destructive-foreground: oklch(0.16 0.02 165);
-  --success: oklch(0.72 0.16 155);
-  --border: oklch(0.3 0.02 165);
-  --input: oklch(0.3 0.02 165);
-  --ring: oklch(0.78 0.13 190);
 }
 
 @layer base {
@@ -114,7 +195,12 @@
     background-color: var(--background);
     color: var(--foreground);
     font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    font-weight: var(--base-font-weight);
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: var(--heading-font-weight);
   }
 
   h1, h2, h3 {

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/misc';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useUpdateGroup } from '@/lib/queries';
 import type { FilterGroup } from '@/lib/types';
@@ -142,7 +142,7 @@ export function EditGroupDialog({
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-base border-2 border-border px-3 py-2.5">
             <div>
               <Label htmlFor="group-notify" className="cursor-pointer">
                 Powiadamiaj o nowych ofertach
@@ -155,7 +155,7 @@ export function EditGroupDialog({
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-base border-2 border-border px-3 py-2.5">
             <div>
               <Label htmlFor="group-active" className="cursor-pointer">
                 Grupa aktywna

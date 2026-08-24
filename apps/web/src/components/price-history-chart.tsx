@@ -73,8 +73,8 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--main)" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="var(--main)" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -92,7 +92,7 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
           <path
             d={path}
             fill="none"
-            stroke="var(--primary)"
+            stroke="var(--main)"
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -108,7 +108,7 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
 
           {/* Direct end label - "lines carry the value at the end". Last point is
               always the rightmost, so anchoring "end" (growing leftward) never clips. */}
-          <circle cx={last.x} cy={last.y} r={5} fill="var(--primary)" stroke="var(--card)" strokeWidth={2} />
+          <circle cx={last.x} cy={last.y} r={5} fill="var(--main)" stroke="var(--secondary-background)" strokeWidth={2} />
           <text
             x={last.x - 8}
             y={last.y - 12}
@@ -133,8 +133,8 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
                 cx={hovered.x}
                 cy={hovered.y}
                 r={5}
-                fill="var(--primary)"
-                stroke="var(--card)"
+                fill="var(--main)"
+                stroke="var(--secondary-background)"
                 strokeWidth={2}
               />
             </>
@@ -143,7 +143,7 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
 
         {hovered ? (
           <div
-            className="bg-popover text-popover-foreground pointer-events-none absolute top-0 z-10 -translate-y-1 rounded-md border px-2.5 py-1.5 text-xs shadow-md"
+            className="bg-secondary-background text-foreground pointer-events-none absolute top-0 z-10 -translate-y-1 rounded-base border-2 border-border px-2.5 py-1.5 text-xs shadow-shadow"
             style={{
               left: `${(hovered.x / WIDTH) * 100}%`,
               transform: `translate(${hovered.x > WIDTH * 0.7 ? '-100%' : '0'}, 0)`,
@@ -156,7 +156,7 @@ export function PriceHistoryChart({ entries }: { entries: PriceHistoryEntry[] })
       </div>
 
       {/* Table view - same values as the chart, for precision and accessibility. */}
-      <div className="max-h-32 overflow-y-auto rounded-md border">
+      <div className="max-h-32 overflow-y-auto rounded-base border-2 border-border">
         <table className="w-full text-sm">
           <tbody>
             {[...entries].reverse().map((entry, i) => (
@@ -200,7 +200,7 @@ function PointCallout({ point, label }: { point: Point; label: string }) {
   const { anchor, dx } = labelAnchor(point.x);
   return (
     <>
-      <circle cx={point.x} cy={point.y} r={4} fill="var(--primary)" stroke="var(--card)" strokeWidth={2} />
+      <circle cx={point.x} cy={point.y} r={4} fill="var(--main)" stroke="var(--secondary-background)" strokeWidth={2} />
       <text
         x={point.x + dx}
         y={point.y - 10}

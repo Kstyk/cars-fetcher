@@ -1,3 +1,5 @@
+import type { GroupRunResult } from './types';
+
 const priceFormatter = new Intl.NumberFormat('pl-PL', {
   style: 'currency',
   currency: 'PLN',
@@ -158,4 +160,32 @@ export function label(
 ): string {
   if (!key) return '—';
   return dictionary[key] ?? key;
+}
+
+/**
+ * Turns a "Pobierz teraz" result into one toast message, scoped to the
+ * group that was actually fetched. The notification bell is a global,
+ * all-groups feed by design (it also carries whatever the background
+ * scheduler produced for *other* groups) - relying on it for feedback right
+ * after a manual fetch reads as "clicking this caused notifications from
+ * every other group too", when really it's an unrelated backlog surfacing
+ * at the same moment. This gives direct, unambiguous feedback instead.
+ */
+export function describeGroupRun(
+  result: GroupRunResult,
+): { message: string; kind: 'success' | 'info' | 'error' } {
+  const failed = result.filters.filter((f) => f.status === 'failed');
+  if (failed.length > 0) {
+    return {
+      kind: 'error',
+      message: `${result.groupName}: ${failed.length} z ${result.filters.length} filtrów nie powiodło się`,
+    };
+  }
+  if (result.totalNew > 0) {
+    return {
+      kind: 'success',
+      message: `${result.groupName}: ${result.totalNew} ${result.totalNew === 1 ? 'nowa oferta' : 'nowych ofert'}`,
+    };
+  }
+  return { kind: 'info', message: `${result.groupName}: brak nowych ofert` };
 }

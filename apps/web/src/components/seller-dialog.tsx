@@ -7,7 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   PROVIDER_COLORS,
   PROVIDER_LABELS,
@@ -84,7 +85,7 @@ export function SellerDialog({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => trackView.mutate(item.id)}
-                  className="hover:bg-accent/50 flex items-center gap-3 rounded-lg border p-2 transition-colors"
+                  className="flex items-center gap-3 rounded-base border-2 border-border p-2 transition-all hover:translate-x-reverseBoxShadowX hover:translate-y-reverseBoxShadowY hover:shadow-shadow"
                 >
                   <div className="bg-muted size-12 shrink-0 overflow-hidden rounded-md">
                     {item.thumbnailUrl ? (

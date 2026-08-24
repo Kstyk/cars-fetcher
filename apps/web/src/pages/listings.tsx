@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -258,7 +259,7 @@ export function ListingsPage() {
         </p>
       </div>
 
-      <div className="bg-card space-y-4 rounded-xl border p-4">
+      <div className="bg-secondary-background space-y-4 rounded-base border-2 border-border p-4 shadow-shadow">
         <div className="flex items-end gap-3">
           <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-56">
             <Label htmlFor="q">Szukaj</Label>
