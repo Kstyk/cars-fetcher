@@ -124,6 +124,18 @@ async function ingestOne(
           firstSeenAt: sql`${listings.firstSeenAt}`,
           isActive: true,
           deactivatedAt: null,
+          // `deactivateStaleListings` marks a stopped-appearing listing
+          // archived, on the assumption it sold - a fresh sighting right
+          // here disproves that assumption (relisted, or the earlier miss
+          // was a crawl gap), so the flag it set has to come back down too.
+          // Without this a listing that ever went quiet once stays hidden
+          // from every "for sale" view forever, even while it is plainly
+          // back and getting price-drop notifications - unlike
+          // `listingMatches.removedAt` (a *criteria* judgement, which must
+          // never erase a real past sale), `isArchived` here was only ever
+          // our own inference from absence, and this sighting overrides it.
+          isArchived: false,
+          archivedAt: null,
           updatedAt: now,
         },
       })
